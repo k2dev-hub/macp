@@ -1,0 +1,8 @@
+web/node_modules
+web/dist
+deploy/secrets
+backups
+**/__pycache__
+**/*.pyc
+.git
+.gitignore

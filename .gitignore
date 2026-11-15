@@ -1,0 +1,26 @@
+# runtime data / build output (never commit)
+backups/
+web/dist/
+web/node_modules/
+
+# python artifacts
+**/__pycache__/
+**/*.pyc
+
+# secrets, keys, certs (never commit)
+deploy/secrets/
+deploy/agent_keys/
+deploy/tls/
+deploy/searxng/settings.yml
+deploy/.env
+deploy/.env.bak
+deploy/.env.env.bak
+tools/
+
+# deployment-specific configuration (copy from config/macp.example.toml)
+config/macp.toml
+
+# generated at runtime (never commit)
+deploy/agent_pubkeys/
+wal-archive/
+deploy/e2e/out/

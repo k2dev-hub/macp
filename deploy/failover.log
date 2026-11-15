@@ -1,0 +1,22 @@
+pg_ctl: cannot be run as root
+Please log in (using, e.g., "su") as the (unprivileged) user that will
+own the server process.
+ Container macp-api Recreate 
+ Container macp-api-2 Recreate 
+ Container macp-api-2 Error response from daemon: Conflict. The container name "/92230f6e53b4_macp-api-2" is already in use by container "162ea770c921467eba54dea45403149af10b05fcfe5cda7249d63d6dd3cfbacb". You have to remove (or rename) that container to be able to reuse that name. 
+Error response from daemon: Conflict. The container name "/92230f6e53b4_macp-api-2" is already in use by container "162ea770c921467eba54dea45403149af10b05fcfe5cda7249d63d6dd3cfbacb". You have to remove (or rename) that container to be able to reuse that name.
+ Container macp-api Recreate 
+ Container macp-api-2 Recreate 
+ Container macp-api-2 Recreated 
+ Container macp-api Recreated 
+ Container macp-observer Recreate 
+ Container macp-observer Recreated 
+ Container macp-api-2 Starting 
+ Container macp-api Starting 
+ Container macp-api Started 
+ Container macp-api Waiting 
+ Container macp-api-2 Started 
+ Container macp-api Healthy 
+ Container macp-observer Starting 
+ Container macp-observer Started 
+2026-11-14T10:50:29Z failover complete: db-standby promoted

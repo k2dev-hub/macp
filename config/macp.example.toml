@@ -1,0 +1,158 @@
+# MACP configuration (example).
+#
+# Copy to `config/macp.toml` and edit.  That file is gitignored: it holds the
+# bindings of *your* deployment (addresses, NAS paths, service URLs) and must
+# never be committed.
+#
+#   cp config/macp.example.toml config/macp.toml
+#   python3 -m server.settings doctor      # validate + test connections
+#
+# Everything here is optional except [deployment]: the stack starts standalone
+# with the defaults below (no NAS, no Gitea, no external KVM node) and each
+# integration is only contacted when it is enabled and configured.
+
+[deployment]
+# Public URL clients use (browser, MCP, OIDC redirects).  Defaults to loopback.
+# Behind a reverse proxy, put the external scheme/host/port here.
+public_url = "https://localhost:9443"
+# Install root.  Empty = the checkout this file lives in.  Set it only when the
+# scripts run from elsewhere (systemd units, cron) and cannot infer it.
+root = ""
+# Writable state that is not in Docker volumes (locks, drills, temporary files).
+state_dir = "/var/lib/macp"
+# Language/locale used by generated reports and timestamps.
+timezone = "Asia/Shanghai"
+
+[api]
+# How the gateway reaches the API inside the compose network.
+internal_base = "http://api:8000"
+# Host address + port nginx publishes the TLS entry on.
+publish_address = "127.0.0.1"
+publish_port = 9443
+# Seconds a request may take before nginx gives up (VM gates are slow).
+proxy_read_timeout = 3600
+
+[database]
+# Container name (single-host compose) or hostname (external Postgres).
+host = "db"
+port = 5432
+name = "macp"
+user = "macp"
+# The primary is whichever container/host the API writes to; the standby list is
+# used by the failover timer.  Leave empty to disable automatic failover.
+standby_hosts = ["db-standby", "db-standby-2"]
+
+# ---------------------------------------------------------------------------
+# Optional integrations.  `enabled = false` (or leaving the address empty) makes
+# the platform skip the integration entirely instead of failing at runtime.
+# ---------------------------------------------------------------------------
+
+[gitea]
+# Only used to fetch/publish the platform source itself.  The deployment runs
+# without it: repositories are served from the local bare repo in the workspace
+# volume.
+enabled = false
+url = ""                       # e.g. "https://gitea.example.com"
+repository = ""                # e.g. "example-org/macp"
+ssh_port = 22
+branch = "main"
+# Token is read from this file at run time; never put it in this file.
+token_file = "secrets/gitea_token"
+
+[backup]
+# Off-site copy of dumps, WAL and bundles.  Without it, backups stay local only.
+enabled = false
+# Mount point of the shared storage, e.g. "/mnt/nas" or "/mnt/nas".
+root = ""
+# Directory under `root` that receives the archive.
+archive_dir = "_archive/macp-backups"
+# Optional WAL mirror under `root` (used by the WAL sync/prune timers).
+wal_mirror_dir = "_archive/macp-wal"
+# Keep this many daily backups locally even when the NAS is configured.
+keep_local = 3
+retention_days = 30
+
+[wal]
+# Local PostgreSQL WAL archive, as the db container sees it.
+archive_dir = "/var/lib/postgresql/wal-archive"
+# The same directory as the host sees it (bind mount) — the sync/prune scripts
+# run on the host.
+host_archive_dir = "/opt/macp/wal-archive"
+# Force a segment switch after this many seconds so an idle database still has a
+# bounded archive size.
+archive_timeout_seconds = 300
+# Never delete local segments newer than this, even when the mirror has them.
+keep_hours = 36
+# Always keep at least this many recent segments locally.
+keep_recent = 64
+# Refuse to prune when the archive is smaller than this (protects tiny setups).
+min_size_bytes = 10737418240
+
+[audit]
+# Where the hash-chained audit anchors and the archived event windows go.
+# Empty = keep them under deployment.state_dir (no external storage needed).
+anchor_dir = ""
+events_archive_dir = ""
+
+[kvm]
+# Ephemeral build VMs on a separate libvirt host.  Disabled = only `sandbox`
+# and `local` execution profiles are available.
+enabled = false
+node_url = "http://127.0.0.1:9300"
+node_host = ""                 # ssh target for image maintenance, e.g. "build-host"
+node_user = "root"
+token_file = "secrets/kvm_node_token"
+image_dir = "/var/lib/libvirt/images/macp/base"
+# Static Windows build node (long-lived VM driven over SSH).
+windows_domain = "macp-win-build"
+windows_workdir = 'C:\macp\work'
+
+[signer]
+# Ed25519 receipt signing service.  When disabled, receipts are refused instead
+# of being stored with a placeholder signature.
+enabled = true
+url = "http://signer:9300"
+token_file = "secrets/signer_token"
+private_key_dir = "deploy/agent_keys"
+public_key_dir = "deploy/agent_pubkeys"
+
+[oidc]
+# Built-in provider by default; point `issuer` at an external IdP to replace it.
+enabled = true
+issuer = ""                    # empty = derive from deployment.public_url + "/oidc"
+client_id = "macp"
+client_secret_file = "secrets/oidc_client_secret"
+admin_password_file = "secrets/oidc_admin_password"
+
+[runner]
+# bwrap sandbox used by the `sandbox`/`local` execution profile.
+enabled = true
+url = "http://runner:9200"
+token_file = "secrets/runner_token"
+workspace_root = "/app/workspace"
+workspace_bytes = 536870912
+
+[mcp]
+# MCP gateway (adapters for Claude Code / Cursor / ...).
+enabled = true
+project = "demo"
+session_ttl_seconds = 14400
+max_sessions = 200
+rate_limit_per_minute = 60
+max_output_chars = 20000
+
+[observability]
+# /metrics and the external watchdog.
+metrics = true
+watchdog_enabled = true
+# Alarm when the WAL archive or the root filesystem crosses these.
+disk_free_min_bytes = 16106127360
+wal_archive_max_bytes = 64424509440
+
+[e2e]
+# Browser end-to-end run (deploy/e2e/run.sh).
+enabled = true
+# Installed browser channel ("msedge", "chrome") or a chromium binary path.
+browser = ""
+chromium_path = "/usr/bin/chromium"
+output_dir = "deploy/e2e/out"
