@@ -2,7 +2,7 @@
 
 **English** · [中文](README.md)
 
-I turned multi-agent coding into an auditable pipeline: the task graph is the
+MACP organises multi-agent coding as an auditable pipeline: the task graph is the
 single source of truth, every artifact goes through Git, every delivery carries
 a signed receipt, and every event is chained by hash. Agents work in sandboxes
 or disposable virtual machines, and nothing merges until its gates pass.
@@ -10,7 +10,8 @@ or disposable virtual machines, and nothing merges until its gates pass.
 ## What it solves
 
 In a multi-agent system the hard part is not model capability — it is knowing
-who changed what, when, and on which evidence. I fixed that process in place:
+who changed what, when, and on which evidence. The mechanisms below fix that
+process into place:
 
 - **The task graph is the source of truth.** A work order declares the write
   surface, the acceptance gates and the execution profile; the repository only
