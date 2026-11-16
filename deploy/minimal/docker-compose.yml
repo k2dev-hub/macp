@@ -1,0 +1,204 @@
+# 最小审计版：一台机器、一个端口、十一个容器。
+#
+#   docker compose -f deploy/minimal/docker-compose.yml up -d
+#
+# 与完整版的区别（都是有意的裁剪）：
+#   * 没有 api-2 / oidc：单实例，登录用管理员 token，不跑 SSO；
+#   * 没有 searxng：不联网检索；
+#   * 没有 KVM 构建节点：只有 sandbox 画像，门禁跑编译/单测/安全检查；
+#   * 没有 Fabric 桥接：审计链是本地哈希链，锚定能力在完整版里。
+#
+# 它证明的是「审计闭环」本身：任务 → 受控工具 → 门禁 → 回执 → 事件链，
+# 以及一条随时能验的历史。产物溯源（构建指纹、二维码）需要构建节点，
+# 在最小版里把 [kvm] 指过去即可，容器数不变。
+
+x-app: &app
+  build:
+    context: ../..
+    dockerfile: deploy/Dockerfile
+  environment:
+    MACP_BASE: http://api:8000
+    MACP_WRITE_TOKEN_FILE: /run/secrets/macp_write_token
+  volumes:
+    - ../secrets/write_token:/run/secrets/macp_write_token:ro
+  depends_on:
+    api:
+      condition: service_healthy
+  networks: [macp]
+  restart: unless-stopped
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: macpmin-db
+    environment:
+      POSTGRES_DB: macp
+      POSTGRES_USER: macp
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - macpmin-pgdata:/var/lib/postgresql/data
+      - ../init/0001_init.sql:/docker-entrypoint-initdb.d/0001_init.sql:ro
+      - ../init/0002_provenance.sql:/docker-entrypoint-initdb.d/0002_provenance.sql:ro
+      - ../init/0003_fabric.sql:/docker-entrypoint-initdb.d/0003_fabric.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U macp -d macp"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [macp]
+    restart: unless-stopped
+
+  api:
+    image: macp-api
+    container_name: macpmin-api
+    environment:
+      DATABASE_URL: postgresql://macp@db:5432/macp
+      MACP_DEMO: "1"
+      MACP_DEMO_SEED_TASKS: "0"
+      MACP_VERSION: "0.3.0"
+      MACP_PUBLIC_URL: ${MACP_PUBLIC_URL:-http://localhost:8280}
+      MACP_WRITE_TOKEN_FILE: /run/secrets/macp_write_token
+      MACP_WORKSPACE_ROOT: /app/workspace
+      MACP_AGENT_KEYS_DIR: /app/agent_pubkeys
+      MACP_RUNNER_URL: http://runner:9200
+      MACP_RUNNER_TOKEN_FILE: /run/secrets/runner_token
+      MACP_SIGNER_URL: http://signer:9300
+      MACP_SIGNER_TOKEN_FILE: /run/secrets/signer_token
+    volumes:
+      - ../secrets/write_token:/run/secrets/macp_write_token:ro
+      - ../secrets/runner_token:/run/secrets/runner_token:ro
+      - ../secrets/signer_token:/run/secrets/signer_token:ro
+      - ../agent_pubkeys:/app/agent_pubkeys:ro
+      - macpmin-workspaces:/app/workspace
+    depends_on:
+      db:
+        condition: service_healthy
+    expose: ["8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/v1/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [macp, runner-net]
+    restart: unless-stopped
+
+  signer:
+    image: macp-api
+    container_name: macpmin-signer
+    command: ["uvicorn", "signer.app:app", "--host", "0.0.0.0", "--port", "9300"]
+    environment:
+      MACP_SIGNER_KEYS_DIR: /keys
+      MACP_SIGNER_TOKEN_FILE: /run/secrets/signer_token
+    volumes:
+      - ../agent_keys:/keys:ro
+      - ../secrets/signer_token:/run/secrets/signer_token:ro
+    expose: ["9300"]
+    networks: [macp]
+    restart: unless-stopped
+
+  runner:
+    image: macp-api
+    container_name: macpmin-runner
+    command: ["uvicorn", "server.runner:app", "--host", "0.0.0.0", "--port", "9200"]
+    environment:
+      MACP_WORKSPACE_ROOT: /app/workspace
+      MACP_RUNNER_TOKEN_FILE: /run/secrets/runner_token
+      MACP_RUNNER_BWRAP: "1"
+    volumes:
+      - ../secrets/runner_token:/run/secrets/runner_token:ro
+      - macpmin-workspaces:/app/workspace
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m
+    cap_drop: [ALL]
+    cap_add: [SYS_ADMIN]
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=unconfined
+      - apparmor=unconfined
+    pids_limit: 1024
+    mem_limit: 1g
+    cpus: 1
+    networks: [macp, runner-net]
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: macpmin-nginx
+    ports:
+      - "${MACP_MIN_PUBLISH:-127.0.0.1:8280}:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [macp]
+    restart: unless-stopped
+
+  observer:
+    <<: *app
+    image: macp-api
+    container_name: macpmin-observer
+    command: ["python", "-m", "server.observer"]
+    environment:
+      DATABASE_URL: postgresql://macp@db:5432/macp
+      MACP_OBSERVER_INTERVAL: "30"
+      MACP_DAILY_COST_ALERT: "5.0"
+
+  scheduler:
+    <<: *app
+    image: macp-api
+    container_name: macpmin-scheduler
+    command: ["python", "-m", "agents.scheduler_loop"]
+    environment:
+      MACP_BASE: http://api:8000
+      MACP_WRITE_TOKEN_FILE: /run/secrets/macp_write_token
+      MACP_WORKERS: worker-e
+      MACP_SCHEDULER_CREATE: "0"
+
+  coordinator:
+    <<: *app
+    image: macp-api
+    container_name: macpmin-coordinator
+    command: ["python", "-m", "agents.coordinator_loop"]
+
+  merge-worker:
+    <<: *app
+    image: macp-api
+    container_name: macpmin-merge-worker
+    command: ["python", "-m", "agents.merge_loop"]
+
+  worker-e:
+    <<: *app
+    image: macp-api
+    container_name: macpmin-worker-e
+    command: ["python", "-m", "agents.worker_loop", "worker-e"]
+    depends_on:
+      api:
+        condition: service_healthy
+      mock-openai:
+        condition: service_started
+
+  mock-openai:
+    image: macp-api
+    container_name: macpmin-mock-openai
+    command: ["uvicorn", "agents.mock_openai:app", "--host", "0.0.0.0", "--port", "9000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9000/v1/models', timeout=3)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    expose: ["9000"]
+    networks: [macp]
+    restart: unless-stopped
+
+volumes:
+  macpmin-pgdata:
+  macpmin-workspaces:
+
+networks:
+  macp:
+    name: macpmin-net
+  runner-net:
+    name: macpmin-runner-net
+    internal: true

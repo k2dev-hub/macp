@@ -138,6 +138,7 @@ device. See [docs/CONFIG.md](docs/CONFIG.md).
 | MCP gateway | [docs/MCP.md](docs/MCP.md) |
 | Consortium anchoring | [deploy/fabric/README.md](deploy/fabric/README.md) |
 | Project site | [site/README.md](site/README.md) |
+| Minimal audit edition | [deploy/minimal/README.md](deploy/minimal/README.md) |
 
 ## License
 
