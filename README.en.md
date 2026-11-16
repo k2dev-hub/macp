@@ -136,6 +136,7 @@ device. See [docs/CONFIG.md](docs/CONFIG.md).
 | Topic | Location |
 |---|---|
 | Configuration and split deployments | [docs/CONFIG.md](docs/CONFIG.md) |
+| Code walkthrough (for newcomers) | [docs/WALKTHROUGH.md](docs/WALKTHROUGH.md) |
 | MCP gateway | [docs/MCP.md](docs/MCP.md) |
 | Consortium anchoring | [deploy/fabric/README.md](deploy/fabric/README.md) |
 | Project site | [site/README.md](site/README.md) |
