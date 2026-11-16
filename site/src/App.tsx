@@ -88,7 +88,7 @@ export default function App() {
             MACP
           </a>
           <nav className="nav" aria-label="主导航">
-            <a href="#why">它解决什么</a>
+            <a href="#why">解决的问题</a>
             <a href="#flow">交付路径</a>
             <a href="#profiles">执行画像</a>
             <a href="#provenance">构建溯源</a>
@@ -104,20 +104,20 @@ export default function App() {
         <section className="hero">
           <div className="wrap">
             <Title level={1} style={{ marginTop: 0 }}>
-              多 Agent 写代码，
+              让多 Agent 产出的代码，
               <br />
-              也要能被审计
+              可被审计
             </Title>
             <Paragraph className="lead">
-              MACP 是一条可审计的交付流水线：任务图是唯一真相源，门禁在真实环境里跑构建，
-              每次交付带签名回执，每条事件串进哈希链，产物指纹还能锚定到联盟链。
+              MACP 是一条可审计的交付流水线：任务图是唯一真相源，门禁在真实环境中执行构建，
+              每次交付附带签名回执，每条事件写入哈希链，产物指纹可锚定至联盟链。
             </Paragraph>
             <Paragraph className="sub">
-              MIT 开源 · Python + TypeScript · 一条命令跑起来 · 不需要任何模型 API key 也能看到完整链路
+              MIT 开源 · Python + TypeScript · 单机即可启动 · 无需模型 API key 亦可完整运行整条链路
             </Paragraph>
             <div className="hero-actions">
               <Button type="primary" size="large" href="#start">
-                五分钟跑起来
+                快速开始
               </Button>
               <Button size="large" href={`${REPO}#readme`} icon={<GithubOutlined />}>
                 看源码
@@ -130,10 +130,10 @@ export default function App() {
         <section id="why" className="alt">
           <div className="wrap">
             <div className="section-head">
-              <Title level={2}>它解决什么</Title>
+              <Title level={2}>解决的问题</Title>
               <Paragraph>
-                多 Agent 系统最容易失控的地方不是模型能力，而是「谁在什么时候、基于什么证据、改动了什么」。
-                我把这段过程固化下来。
+                多 Agent 系统最易失控之处不在模型能力，而在「谁在何时、基于何种证据、改动了什么」。
+                下列机制将该过程固化为可核查的记录。
               </Paragraph>
             </div>
             <Row gutter={[16, 16]}>
@@ -153,8 +153,8 @@ export default function App() {
         <section id="flow">
           <div className="wrap">
             <div className="section-head">
-              <Title level={2}>一次交付的路径</Title>
-              <Paragraph>调度、校验、构建、签名、合并，每一步都留痕。</Paragraph>
+              <Title level={2}>一次交付的执行路径</Title>
+              <Paragraph>调度、校验、构建、签名、合并，每个环节均留下记录。</Paragraph>
             </div>
             <Steps
               direction="vertical"
@@ -167,7 +167,7 @@ export default function App() {
                 {
                   title: "受控调用工具",
                   description:
-                    "worker 调 shell_run / gate_run / workspace_write_file；工具按工作项校验写面与平台，越界直接 403。",
+                    "worker 调 shell_run / gate_run / workspace_write_file；工具按工作项校验写面与平台，越界请求返回 403。",
                 },
                 {
                   title: "真实构建与门禁",
@@ -237,8 +237,8 @@ export default function App() {
                 </dl>
                 <Divider />
                 <Paragraph>
-                  验证会重算三件事：记录指纹、签名、产物文件的 SHA-256。替换产物或改动任意字段，
-                  验证页立即变红并指出是哪一项不通过。
+                  验证时重算三项内容：记录指纹、签名与产物文件的 SHA-256。产物被替换或字段被改动，
+                  验证页即判定失败并指出未通过的检查项。
                 </Paragraph>
               </Col>
               <Col xs={24} lg={12}>
@@ -282,7 +282,7 @@ GET /v1/provenance/<build_id>/stamp.zip
                 <Timeline
                   items={[
                     { children: "API 只认一个本地 bridge 地址：没有 SDK、gRPC、MSP 材料进入应用容器" },
-                    { children: "链码 anchor：同编号同指纹幂等，异指纹直接拒绝" },
+                    { children: "链码 anchor：同编号同指纹幂等，异指纹提交将被拒绝" },
                     { children: "返回 tx_id 落库，公开验证页显示「联盟链交易」" },
                     { children: "链不可达时降级为「未锚定」，绝不影响构建记录" },
                   ]}
@@ -301,10 +301,10 @@ GET /v1/provenance/<build_id>/stamp.zip
         <section id="start">
           <div className="wrap">
             <div className="section-head">
-              <Title level={2}>五分钟跑起来</Title>
+              <Title level={2}>快速开始</Title>
               <Paragraph>
-                默认单机、只监听 loopback、不连任何外部设备。内置 mock 模型服务，
-                不用真实 API key 也能看到「派单 → 写码 → 门禁 → 回执 → 合并」。
+                默认单机部署，仅监听 loopback，不连接任何外部设备。内置 mock 模型服务，
+                无需真实 API key 即可观察完整链路：派单 → 写码 → 门禁 → 回执 → 合并。
               </Paragraph>
             </div>
             <Row gutter={[24, 24]}>
@@ -351,7 +351,7 @@ docker compose -f deploy/docker-compose.yml up -d --build
         <section className="alt">
           <div className="wrap">
             <div className="section-head">
-              <Title level={2}>继续了解</Title>
+              <Title level={2}>延伸阅读</Title>
             </div>
             <Row gutter={[16, 16]}>
               {[
@@ -371,7 +371,7 @@ docker compose -f deploy/docker-compose.yml up -d --build
                 },
                 {
                   icon: <ThunderboltOutlined />,
-                  title: "参与进来",
+                  title: "参与贡献",
                   body: "MIT 许可，欢迎 issue 与 PR；CI 会跑配置解析、编译、脚本语法与前端构建。",
                   href: REPO,
                   cta: "去 GitHub",
@@ -379,7 +379,7 @@ docker compose -f deploy/docker-compose.yml up -d --build
                 {
                   icon: <BuildOutlined />,
                   title: "构建溯源",
-                  body: "每个产物都有可验证的来源记录，扫码即可核对。",
+                  body: "每个产物均有可验证的来源记录，扫码即可核对。",
                   href: `${REPO}/blob/main/docs/CONFIG.md`,
                   cta: "读配置文档",
                 },

@@ -26,7 +26,7 @@ const page = template
 
 await writeFile(path.join(clientDir, "index.html"), page, "utf8");
 
-const SITE = "https://k2dev-hub.github.io/macp/";
+const SITE = "https://www.miaodun.tech/";
 const today = new Date().toISOString().slice(0, 10);
 const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
