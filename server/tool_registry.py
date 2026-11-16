@@ -28,6 +28,8 @@ from fastapi.responses import JSONResponse
 
 from .auth import Principal, principal_of, require_write_token
 from .db import current_project, emit_event
+from . import artifact_stamp, fabric
+from .provenance import record_build
 from .workorders import (
     DEFAULT_WRITE_SURFACE,
     LEVEL_NAMES,
@@ -680,9 +682,13 @@ def run_command(
             f"unknown execution profile {profile!r}; known={sorted(profiles)}"
         )
     if kind == "kvm-node":
-        return kvm_node_run(argv, cwd, timeout, profile, collect=collect)
+        result = kvm_node_run(argv, cwd, timeout, profile, collect=collect)
+        result["argv"] = list(argv)
+        return result
     if RUNNER_URL:
-        return runner_run(argv, cwd, timeout)
+        result = runner_run(argv, cwd, timeout)
+        result["argv"] = list(argv)
+        return result
     allowed = {"ls", "cat", "grep"}
     command = Path(argv[0]).name if argv else ""
     python_ok = re.fullmatch(r"python3?(\.\d+)?", command) is not None
@@ -700,6 +706,7 @@ def run_command(
         "exit": proc.returncode,
         "stdout": proc.stdout[-4000:],
         "stderr": proc.stderr[-4000:],
+        "argv": list(argv),
     }
 
 
@@ -1117,7 +1124,9 @@ async def execute(name: str, task: str, agent: str, attempt: int, args: dict, re
                     name = Path(str(item.get("path", "artifact"))).name or "artifact"
                     raw = payloads.get(item.get("path"))
                     if raw:
-                        (art_dir / name).write_bytes(base64.b64decode(raw))
+                        stored = art_dir / name
+                        stored.write_bytes(base64.b64decode(raw))
+                        item["stored"] = str(stored.relative_to(base))
                     await emit_event(
                         conn,
                         "artifact.produced",
@@ -1165,12 +1174,79 @@ async def execute(name: str, task: str, agent: str, attempt: int, args: dict, re
                 f"file://{log_path}",
                 len(log),
             )
+            # Provenance: every artifact-producing gate leaves a verifiable
+            # record (what/from-which-commit/with-which-command/which-deps/
+            # which-environment/by-whom), signed and joined to the audit chain.
+            provenance: list[dict] = []
+            if artifacts:
+                head = git("rev-parse", "HEAD", cwd=base, check=False).stdout.strip()
+                provenance = await record_build(
+                    conn,
+                    project=current_project(),
+                    task_row=task_row,
+                    agent=agent,
+                    gate=gate,
+                    result=result,
+                    artifacts=artifacts,
+                    base=base,
+                    source_commit=head,
+                    source_ref="HEAD",
+                    command=result.get("argv") or [],
+                    evidence_id=stored_id,
+                )
+                if fabric.enabled() and provenance:
+                    for record in provenance:
+                        outcome = fabric.anchor(record)
+                        record["fabric"] = outcome
+                        if outcome:
+                            await conn.execute(
+                                """
+                                update build_provenance
+                                   set fabric_tx_id = $2::text,
+                                       fabric_block = $3::bigint,
+                                       fabric_status = $4::text,
+                                       fabric_error = $5::text,
+                                       fabric_anchored = case when $2::text is null then null else now() end
+                                 where id = $1
+                                """,
+                                uuid.UUID(record["row_id"]),
+                                outcome.get("tx_id"),
+                                outcome.get("block"),
+                                outcome.get("status"),
+                                outcome.get("error"),
+                            )
+                # 标签包：记录 + 二维码 + 说明，和产物一起归档
+                public_url = os.getenv("MACP_PUBLIC_URL", "").strip()
+                if provenance and public_url:
+                    for record in provenance:
+                        stamp_dir = evidence_dir / "stamped" / record["build_id"]
+                        stamp_dir.mkdir(parents=True, exist_ok=True)
+                        try:
+                            for name, data in artifact_stamp.build_stamp(record, public_url).items():
+                                (stamp_dir / name).write_bytes(data)
+                            record["stamp_dir"] = str(stamp_dir.relative_to(base))
+                        except Exception as exc:  # 标签包失败不影响记录
+                            record["stamp_error"] = str(exc)[:120]
+                for record in provenance:
+                    await emit_event(
+                        conn,
+                        "provenance.recorded",
+                        "task",
+                        task_row["id"],
+                        1,
+                        "agent",
+                        agent_row["id"],
+                        task,
+                        record,
+                    )
+
             return {
                 "gate": gate,
                 "exit": result["exit"],
                 "stdout": result["stdout"],
                 "stderr": result["stderr"],
                 "evidence_id": str(stored_id),
+                "provenance": provenance,
                 "profile": result.get("profile") or execution_profile,
                 "vm": result.get("vm"),
                 "artifacts": [

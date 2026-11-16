@@ -156,3 +156,13 @@ enabled = true
 browser = ""
 chromium_path = "/usr/bin/chromium"
 output_dir = "deploy/e2e/out"
+
+[fabric]
+# Consortium-chain anchoring is optional.  When enabled, every build record's
+# fingerprint is also submitted to a channel; the bridge runs next to the peer.
+enabled = false
+bridge_url = "http://127.0.0.1:9310"
+channel = "macp"
+chaincode = "provenance"
+msp_id = "Org1MSP"
+token_file = "secrets/fabric_bridge_token"

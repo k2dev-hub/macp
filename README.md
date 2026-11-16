@@ -15,6 +15,11 @@
 - **门禁绑定执行环境**：在哪种环境里构建，就在哪种环境里复验（Linux / Android / Windows 各自的门禁）；
 - **交付可验证**：候选 ref → 门禁结果 → Ed25519 签名回执 → 合并；验证者用公钥独立复算；
 - **历史可追溯**：追加式事件链 + 每日锚点 + 异地镜像，改一条历史就对不上哈希；
+- **联盟链锚定（可选）**：`[fabric]` 启用后，每条构建记录的**指纹**另提交到 Fabric 通道，
+  API 只认一个本地 bridge 地址，链码保证同编号同指纹幂等、异指纹拒绝；
+- **标签包**：每次构建同时生成 `provenance.json`、`verify-qr.svg`、`verify-qr.png` 和说明书，
+  与产物一起归档，可随产物分发或贴标；
+
 - **合并单车道**：同一时刻只有一个合并者，合并后再复验一次，失败可回滚。
 
 ## 快速开始
@@ -70,13 +75,37 @@ docker compose -f deploy/docker-compose.yml up -d --build
 
 `shell_run` 必须声明平台，系统路由到对应执行体；任务声明的平台白名单之外的调用一律拒绝。
 
+## 构建溯源
+
+每次产出物的门禁都会自动留下一条可验证记录，不需要开发者额外填写：
+
+| 记录内容 | 来源 |
+|---|---|
+| 产物指纹与大小 | 门禁收集产物时计算 |
+| 源码版本 | 构建时工作区的 HEAD |
+| 构建命令 | 门禁实际执行的 argv |
+| 构建环境 | 执行画像、虚拟机、内核与运行时 |
+| 依赖清单 | 从工作区的 requirements / package.json / build.gradle / go.mod 读取 |
+| 构建人与时间 | 认领任务的 agent 与记录时间 |
+
+记录带指纹和 Ed25519 签名，并写入审计链。任何人拿到构建编号就能查：
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" https://<host>/v1/provenance/B-20261116-56C782
+curl https://<host>/verify/B-20261116-56C782          # 公开验证页
+curl https://<host>/verify/B-20261116-56C782/qr.svg   # 贴在产物上的二维码
+```
+
+验证会重算三件事：记录指纹、签名、产物文件的 SHA-256。替换产物或改动任意字段，
+验证页立即变红，并指出是哪一项不通过。
+
 ## 可观测与运维
 
 - `GET /v1/health`、`GET /metrics`（Prometheus 文本格式）
 - 观察者心跳 + 事件新鲜度，外部 watchdog 每分钟巡检，异常自动重启
 - 每日备份（数据库 + 仓库 bundle + 工作区）、WAL 归档、PITR 演练、恢复演练
 - 发布门禁 `./deploy/release-check.sh`：健康、审计链、复制、单元、磁盘、
-  三条真实构建链、平台路由、浏览器 E2E
+  三条真实构建链、平台路由、构建溯源、浏览器 E2E
 
 ## 配置
 
@@ -96,6 +125,7 @@ python3 -m server.settings doctor   # 校验 + 探测已启用的集成
 |---|---|
 | 配置项与拆分部署 | [docs/CONFIG.md](docs/CONFIG.md) |
 | MCP 网关 | [docs/MCP.md](docs/MCP.md) |
+| 联盟链锚定 | [deploy/fabric/README.md](deploy/fabric/README.md) |
 
 ## 许可
 

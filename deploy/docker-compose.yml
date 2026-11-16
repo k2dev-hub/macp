@@ -1,4 +1,4 @@
-name: macp
+﻿name: macp
 
 x-agent-base: &agent-base
   build:
@@ -163,6 +163,9 @@ services:
       MACP_SIGNER_URL: http://signer:9300
       MACP_SIGNER_TOKEN_FILE: /run/secrets/signer_token
       # Build node address from [kvm].node_url via deploy/.env; empty disables VM profiles.
+      MACP_PUBLIC_URL: ${MACP_PUBLIC_URL:-}
+      MACP_FABRIC_URL: ${MACP_FABRIC_URL:-}
+      MACP_FABRIC_TOKEN_FILE: /run/secrets/fabric_bridge_token
       MACP_KVM_NODE_URL: ${MACP_KVM_NODE_URL:-}
       MACP_KVM_NODE_TOKEN_FILE: /run/secrets/kvm_node_token
       MACP_WAL_ARCHIVE_DIR: /wal-archive
@@ -176,6 +179,7 @@ services:
       - ./secrets/runner_token:/run/secrets/runner_token:ro
       - ./agent_pubkeys:/app/agent_pubkeys:ro
       - ./secrets/signer_token:/run/secrets/signer_token:ro
+      - ./secrets/fabric_bridge_token:/run/secrets/fabric_bridge_token:ro
       - ./secrets/kvm_node_token:/run/secrets/kvm_node_token:ro
       - /opt/macp/wal-archive:/wal-archive:ro
       - ./secrets/llm_master_key:/run/secrets/llm_master_key:ro
@@ -224,6 +228,9 @@ services:
       MACP_SIGNER_URL: http://signer:9300
       MACP_SIGNER_TOKEN_FILE: /run/secrets/signer_token
       # Build node address from [kvm].node_url via deploy/.env; empty disables VM profiles.
+      MACP_PUBLIC_URL: ${MACP_PUBLIC_URL:-}
+      MACP_FABRIC_URL: ${MACP_FABRIC_URL:-}
+      MACP_FABRIC_TOKEN_FILE: /run/secrets/fabric_bridge_token
       MACP_KVM_NODE_URL: ${MACP_KVM_NODE_URL:-}
       MACP_KVM_NODE_TOKEN_FILE: /run/secrets/kvm_node_token
       MACP_WAL_ARCHIVE_DIR: /wal-archive
@@ -237,6 +244,7 @@ services:
       - ./secrets/runner_token:/run/secrets/runner_token:ro
       - ./agent_pubkeys:/app/agent_pubkeys:ro
       - ./secrets/signer_token:/run/secrets/signer_token:ro
+      - ./secrets/fabric_bridge_token:/run/secrets/fabric_bridge_token:ro
       - ./secrets/kvm_node_token:/run/secrets/kvm_node_token:ro
       - /opt/macp/wal-archive:/wal-archive:ro
       - ./secrets/llm_master_key:/run/secrets/llm_master_key:ro

@@ -107,6 +107,18 @@ run_probe() { # name, script
 [ "$SKIP_ANDROID" -eq 0 ] && run_probe "android-build" "$DIR/verify/verify-android.py"
 [ "$SKIP_WINDOWS" -eq 0 ] && run_probe "windows-build" "$DIR/verify/verify-windows.py"
 run_probe "platform routing" "$DIR/verify/verify-platforms.py"
+# 构建溯源：真实构建 → 记录 → 公共验证页 → 篡改检测
+run_probe "provenance" "$DIR/verify/verify-provenance.py"
+
+# 联盟链桥接：启用时才检查（bridge 在应用机本地，容器经网关访问）
+FABRIC_URL="$(cfg fabric.bridge_url "")"
+if [ -n "$FABRIC_URL" ] && [ "$(cfg fabric.enabled false)" = "true" ]; then
+  if curl -sf --max-time 5 "${FABRIC_URL}/health" 2>/dev/null | grep -q '"status": *"ok"'; then
+    record "fabric" PASS "$FABRIC_URL"
+  else
+    record "fabric" FAIL "bridge unreachable at $FABRIC_URL"
+  fi
+fi
 
 # --------------------------------------------------------------------- E2E
 if [ "$SKIP_E2E" -eq 0 ]; then

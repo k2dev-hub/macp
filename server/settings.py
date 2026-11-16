@@ -83,6 +83,14 @@ DEFAULTS: dict[str, dict[str, Any]] = {
     "observability": {"metrics": True, "watchdog_enabled": True,
                       "disk_free_min_bytes": 15 * 1024 ** 3,
                       "wal_archive_max_bytes": 60 * 1024 ** 3},
+    "fabric": {
+        "enabled": False,
+        "bridge_url": "",
+        "channel": "macp",
+        "chaincode": "provenance",
+        "msp_id": "Org1MSP",
+        "token_file": "secrets/fabric_bridge_token",
+    },
     "e2e": {"enabled": True, "browser": "", "chromium_path": "/usr/bin/chromium",
             "output_dir": "deploy/e2e/out"},
 }

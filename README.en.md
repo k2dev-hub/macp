@@ -21,6 +21,12 @@ who changed what, when, and on which evidence. I fixed that process in place:
   receipt → merge. Anyone can recompute the receipt from the public key.
 - **History is tamper-evident.** An append-only event chain, daily anchors and an
   off-host mirror; editing one record breaks the hash.
+- **Consortium anchoring (optional)**: with `[fabric]` enabled, each record's
+  fingerprint is also submitted to a Fabric channel; the API only knows a local
+  bridge address, and the chaincode keeps anchors idempotent per fingerprint;
+- **Stamp package**: every build also emits `provenance.json`, `verify-qr.svg`,
+  `verify-qr.png` and a short readme, archived with the artifact;
+
 - **Merges are single-lane.** One merger at a time, a re-verification after the
   merge, and a rollback path when it fails.
 
@@ -84,6 +90,23 @@ The path of one delivery:
 `shell_run` must name a platform; the system routes to the matching executor and
 refuses anything outside the task's declared allow-list.
 
+## Build provenance
+
+Every artifact-producing gate leaves a verifiable record without extra work from
+the agent: artifact hash and size, source commit, the exact command, the
+execution environment, the dependency list read from the worktree, the builder
+and the time.
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" https://<host>/v1/provenance/B-20261116-56C782
+curl https://<host>/verify/B-20261116-56C782          # public verification page
+curl https://<host>/verify/B-20261116-56C782/qr.svg   # QR code for a sticker
+```
+
+Verification recomputes the record fingerprint, the signature and the artifact
+hash. Replace the artifact or edit any field and the page turns red, naming the
+check that failed.
+
 ## Observability and operations
 
 - `GET /v1/health`, `GET /metrics` (Prometheus text format)
@@ -92,7 +115,7 @@ refuses anything outside the task's declared allow-list.
 - Daily backups (database, repository bundles, workspace), WAL archiving, PITR
   drills, restore drills
 - Release gate `./deploy/release-check.sh`: health, audit chain, replication,
-  systemd units, disk, three real build chains, platform routing, browser E2E
+  systemd units, disk, three real build chains, platform routing, build provenance, browser E2E
 
 ## Configuration
 
@@ -113,6 +136,7 @@ device. See [docs/CONFIG.md](docs/CONFIG.md).
 |---|---|
 | Configuration and split deployments | [docs/CONFIG.md](docs/CONFIG.md) |
 | MCP gateway | [docs/MCP.md](docs/MCP.md) |
+| Consortium anchoring | [deploy/fabric/README.md](deploy/fabric/README.md) |
 
 ## License
 

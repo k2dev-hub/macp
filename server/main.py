@@ -25,6 +25,7 @@ from .auth import me_router as auth_router
 from .agent_api import router as agent_router
 from .admin_api import router as admin_router
 from .document_api import router as document_router
+from .provenance_api import router as provenance_router
 from .tool_registry import router as tool_router
 from .merge_api import router as merge_router
 from .settings import SETTINGS as settings
@@ -57,6 +58,7 @@ app.include_router(auth_router)
 app.include_router(agent_router)
 app.include_router(admin_router)
 app.include_router(document_router)
+app.include_router(provenance_router)
 app.include_router(tool_router)
 app.include_router(merge_router)
 

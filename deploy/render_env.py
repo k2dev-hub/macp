@@ -32,6 +32,7 @@ MANAGED = [
     ("MACP_DB_NAME", lambda s: s.get("database.name")),
     ("MACP_DB_USER", lambda s: s.get("database.user")),
     ("MACP_WAL_ARCHIVE_TIMEOUT", lambda s: s.get("wal.archive_timeout_seconds")),
+    ("MACP_FABRIC_URL", lambda s: s.get("fabric.bridge_url") if s.enabled("fabric") else ""),
     ("MACP_KVM_NODE_URL", lambda s: s.get("kvm.node_url") if s.enabled("kvm") else ""),
     ("MACP_OIDC_ISSUER", lambda s: s.oidc_issuer),
     ("MACP_OIDC_REDIRECT_URIS", lambda s: ",".join(s.get("oidc.redirect_uris") or [])),
