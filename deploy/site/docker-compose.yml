@@ -1,0 +1,26 @@
+# Static site for the project.  The build output (dist/client) is prerendered
+# HTML, so production needs only a static file server.
+#
+#   docker compose -f deploy/site/docker-compose.yml up -d
+#
+# Build first (Node is only needed at build time):
+#   docker run --rm -v "$PWD/site:/app" -v macp-site-node:/app/node_modules \
+#     -w /app node:22-alpine sh -c "npm install && npm run build:all"
+
+services:
+  site:
+    image: nginx:1.27-alpine
+    container_name: macp-site
+    restart: unless-stopped
+    # Bound to loopback: the public entry point is the Cloudflare tunnel, so
+    # nothing on the LAN needs to reach this port directly.
+    ports:
+      - "127.0.0.1:8090:80"
+    volumes:
+      - ../../site/dist/client:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
