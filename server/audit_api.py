@@ -25,16 +25,18 @@ router = APIRouter(tags=["audit"])
 
 ACTIVE_STATES = ("ready", "assigned", "in_progress", "review", "blocked", "blocked_review")
 
+# observer.scanned 是探针心跳（每次扫描一条），不计入业务事件
 _SUMMARY_SQL = """
 select
-  (select count(*) from events where project_id=$1) as events,
+  (select count(*) from events where project_id=$1 and type <> 'observer.scanned') as events,
   (select max(seq) from events where project_id=$1) as last_seq,
   (select hash from events where project_id=$1 order by seq desc limit 1) as head_hash,
   (select count(*) from receipts where project_id=$1) as receipts,
   (select count(*) from build_provenance where project_id=$1) as builds,
   (select count(*) from build_provenance where project_id=$1 and fabric_status='anchored') as anchored,
-  (select count(*) from events where project_id=$1 and type='gate.passed') as gates_passed,
-  (select count(*) from events where project_id=$1 and type='gate.failed') as gates_failed
+  (select count(*) from events where project_id=$1 and type='tool.succeeded') as tools_ok,
+  (select count(*) from events where project_id=$1 and type='tool.failed') as tools_failed,
+  (select count(*) from events where project_id=$1 and type='provenance.recorded') as provenance
 """
 
 # tasks 没有 assignee 列：负责人来自当前有效的 assignment
@@ -78,8 +80,9 @@ async def audit_summary(request: Request):
             "receipts": row["receipts"] or 0,
             "builds": row["builds"] or 0,
             "anchored": row["anchored"] or 0,
-            "gates_passed": row["gates_passed"] or 0,
-            "gates_failed": row["gates_failed"] or 0,
+            "tools_ok": row["tools_ok"] or 0,
+            "tools_failed": row["tools_failed"] or 0,
+            "provenance": row["provenance"] or 0,
         },
         "chain": {
             "enabled": fabric.enabled(),
@@ -156,6 +159,7 @@ _PAGE = """<!doctype html>
  .b-receipt { background: #d2992222; color: #e3b341; }
  .b-chain { background: #a371f722; color: #bc8cff; }
  .b-merge { background: #f8514922; color: #ff7b72; }
+ .b-fail { background: #f8514933; color: #ff7b72; }
  .b-other { background: #30363d; color: #9aa5b1; }
  .sum { color: #c9d1d9; }
  .sum small { color: #7d8794; }
@@ -188,9 +192,9 @@ _PAGE = """<!doctype html>
 </header>
 <div class="stats">
   <div class="stat"><b id="c-events">0</b><span>审计事件</span></div>
-  <div class="stat"><b id="c-gates">0</b><span>门禁通过</span></div>
+  <div class="stat"><b id="c-tools">0</b><span>工具调用成功</span></div>
   <div class="stat"><b id="c-receipts">0</b><span>签名回执</span></div>
-  <div class="stat"><b id="c-builds">0</b><span>构建记录</span></div>
+  <div class="stat"><b id="c-provenance">0</b><span>溯源记录</span></div>
   <div class="stat"><b id="c-anchored">0</b><span>已上链</span></div>
   <div class="stat"><b id="c-height">-</b><span>区块高度</span></div>
 </div>
@@ -232,6 +236,12 @@ function fmtTime(iso) {
 function summarize(ev) {
   const p = ev.payload || {};
   const t = ev.type;
+  if (t === "tool.called") return `调用 ${p.tool || "工具"}${p.channel ? " · " + p.channel : ""}`;
+  if (t === "tool.succeeded") return `${p.tool || "工具"} 完成`;
+  if (t === "tool.failed") return `${p.tool || "工具"} 失败：${(p.error || "").slice(0, 60)}`;
+  if (t === "model.usage") return `${p.model || "模型"} · ${(p.prompt_tokens || 0) + (p.completion_tokens || 0)} tokens · ¥${p.cost || 0}`;
+  if (t === "assignment.offered") return `派单给 ${p.agent || ""}`;
+  if (t === "task.blocked") return `阻塞：${(p.reason || "").slice(0, 40)}`;
   const map = {
     "task.created": () => `创建任务 ${p.code || ev.task || ""}`,
     "task.assigned": () => `派单给 ${p.agent || ""}`,
@@ -259,6 +269,7 @@ let paused = false;
 
 function addRow(ev) {
   if (paused || seen.has(ev.seq)) return;
+  if (!ev.type || ev.type.startsWith("observer.")) return;
   seen.add(ev.seq);
   const [name, cls] = kindOf(ev.type);
   const row = document.createElement("div");
@@ -297,9 +308,9 @@ async function refreshSummary() {
     const data = await response.json();
     const c = data.counters;
     document.getElementById("c-events").textContent = c.events;
-    document.getElementById("c-gates").textContent = c.gates_passed;
+    document.getElementById("c-tools").textContent = c.tools_ok;
     document.getElementById("c-receipts").textContent = c.receipts;
-    document.getElementById("c-builds").textContent = c.builds;
+    document.getElementById("c-provenance").textContent = c.provenance;
     document.getElementById("c-anchored").textContent = c.anchored;
     document.getElementById("c-height").textContent = (data.chain || {}).height ?? "-";
     document.getElementById("head").textContent =
