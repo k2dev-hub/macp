@@ -7,7 +7,8 @@ the chain and compare.  The four outcomes are the whole point of the exercise:
   consistent   both sides hold the same fingerprint
   local-only   recorded locally but never anchored (chain down, or disabled)
   chain-only   anchored but the local row is gone (database restored from an
-               older backup, or a different project)
+               older backup, or the row was archived).  Informational: the chain
+               keeps every anchor forever.
   mismatch     both exist and disagree — this must never happen
 
 Usage
@@ -16,8 +17,9 @@ Usage
   python3 deploy/fabric/verify-ledger.py --limit 500    # scan more chain records
 
 Exit code
-  0  every record is consistent (or the chain is disabled and --allow-disable)
-  1  at least one local-only / chain-only / mismatch record
+  0  no local-only record and no mismatch (chain-only entries are reported but
+     do not fail the check)
+  1  a local record was never anchored, or a fingerprint disagrees
 """
 
 from __future__ import annotations
@@ -92,16 +94,25 @@ def main() -> int:
                 f"{(item['chain_fingerprint'] or '')[:16]:<20}"
             )
 
-    bad = [item for item in comparison if item["state"] != "consistent"]
+    chain_only = [item for item in comparison if item["state"] == "chain-only"]
+    bad = [item for item in comparison if item["state"] in ("local-only", "mismatch")]
+
+    if chain_only:
+        print()
+        print(f"仅在链上、本地已无记录：{len(chain_only)} 条（属正常，链只增不删）")
+        for item in chain_only[:5]:
+            print(f"  {item['build_id']}")
+
     if bad:
         print()
-        print(f"发现 {len(bad)} 条不一致：")
+        print(f"发现 {len(bad)} 条异常：")
         for item in bad:
             print(f"  {item['state']:<12}{item['build_id']}  {item['detail']}")
         return 1
 
     print()
-    print(f"全部一致（{len(comparison)} 条）")
+    print(f"核对通过（链上 {len(comparison)} 条，其中一致 "
+          f"{sum(1 for i in comparison if i['state'] == 'consistent')} 条）")
     return 0
 
 

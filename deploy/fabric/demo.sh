@@ -33,7 +33,8 @@ pause() { [ "$AUTO" -eq 1 ] && return 0; printf '\n%s（回车继续）%s' "$DIM
 
 TOKEN="$(cat deploy/secrets/write_token 2>/dev/null)"
 [ -n "$TOKEN" ] || { echo "找不到 deploy/secrets/write_token，先在仓库根运行 ./deploy/bootstrap.sh"; exit 1; }
-PUBLIC="${MACP_PUBLIC_URL:-https://localhost:9443}"
+HOST_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+PUBLIC="${MACP_PUBLIC_URL:-https://${HOST_IP:-localhost}:9443}"
 FABRIC_URL="${MACP_FABRIC_URL:-http://172.28.0.1:9310}"
 FABRIC_TOKEN="$(cat deploy/secrets/fabric_bridge_token 2>/dev/null)"
 
@@ -89,7 +90,7 @@ fi
 # ---------------------------------------------------------------- 3. 上链
 act "第 3 幕 · 上链结果：数据库里的交易号与链上读回"
 
-LEDGER="$(curl -s --max-time 30 -H "Authorization: Bearer $TOKEN" "$PUBLIC/v1/fabric/ledger?limit=5" 2>/dev/null)"
+LEDGER="$(curl -sk --max-time 30 -H "Authorization: Bearer $TOKEN" "$PUBLIC/v1/fabric/ledger?limit=5" 2>/dev/null)"
 LEDGER="$LEDGER" python3 - <<'PY'
 import json, os
 try:

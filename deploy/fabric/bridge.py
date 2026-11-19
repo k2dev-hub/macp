@@ -19,6 +19,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
@@ -93,20 +94,26 @@ def anchor(payload: dict) -> dict:
         return {"error": (output or "invoke failed").strip()[-400:]}
 
     # 读回确认：链上确实存在且指纹一致。链上记录里的 tx_id 是权威值
-    # （stub.GetTxID()），命令行不会打印它。
-    qcode, qout = query_chaincode(build_id)
+    # （stub.GetTxID()），命令行不会打印它。提交后账本不一定立刻可见，
+    # 所以要重试几次，否则会退化成"从输出里猜交易号"。
     record = None
-    if qcode == 0:
-        try:
-            record = json.loads(qout.strip().splitlines()[-1])
-        except ValueError:
-            record = None
+    for attempt in range(6):
+        qcode, qout = query_chaincode(build_id)
+        if qcode == 0:
+            try:
+                record = json.loads(qout.strip().splitlines()[-1])
+                break
+            except ValueError:
+                record = None
+        time.sleep(1)
     if record and record.get("fingerprint") != fingerprint:
         return {"error": "ledger fingerprint differs from the submitted one"}
 
     tx_id = (record or {}).get("tx_id") or extract_tx_id(output)
     if not tx_id:
         return {"error": "no transaction id in the peer output: " + output.strip()[-300:]}
+    if tx_id == fingerprint:
+        return {"error": "transaction id equals the fingerprint; refusing to record it"}
 
     block = extract_block(output)
     if block is None:
@@ -121,11 +128,22 @@ def anchor(payload: dict) -> dict:
 
 
 def extract_tx_id(text: str) -> str | None:
-    match = re.search(r"txid \[([0-9a-f]{64})\]", text)
-    if match:
-        return match.group(1)
-    match = re.search(r"\b([0-9a-f]{64})\b", text)
-    return match.group(1) if match else None
+    """Find the transaction id in peer output.
+
+    Only accept a 64-hex token that is *labelled* as a transaction id.  A bare
+    64-hex match would happily pick the fingerprint out of the payload, which is
+    how a record once ended up with its fingerprint stored as its tx id.
+    """
+
+    for pattern in (
+        r"txid \[([0-9a-f]{64})\]",
+        r'"tx_id"\s*:\s*"([0-9a-f]{64})"',
+        r"Transaction ID:\s*([0-9a-f]{64})",
+    ):
+        match = re.search(pattern, text)
+        if match:
+            return match.group(1)
+    return None
 
 
 def channel_height() -> int | None:
