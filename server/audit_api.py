@@ -37,11 +37,20 @@ select
   (select count(*) from events where project_id=$1 and type='gate.failed') as gates_failed
 """
 
+# tasks 没有 assignee 列：负责人来自当前有效的 assignment
 _TASKS_SQL = """
-select code, title, state, assignee, updated_at
-from tasks
-where project_id=$1 and state = any($2::text[])
-order by updated_at desc
+select t.code, t.title, t.state, ag.code as agent, t.updated_at
+from tasks t
+left join lateral (
+  select a.agent_id
+  from assignments a
+  where a.task_id = t.id and a.state in ('offered','claimed','active')
+  order by a.created_at desc
+  limit 1
+) a on true
+left join agents ag on ag.id = a.agent_id
+where t.project_id=$1 and t.state = any($2::text[])
+order by t.updated_at desc
 limit 8
 """
 
@@ -100,7 +109,7 @@ async def audit_summary(request: Request):
                 "code": task["code"],
                 "title": task["title"],
                 "state": task["state"],
-                "assignee": task["assignee"],
+                "agent": task["agent"],
                 "updated_at": task["updated_at"].isoformat(),
             }
             for task in tasks
