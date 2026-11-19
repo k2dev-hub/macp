@@ -15,6 +15,13 @@ MACP API ──HTTP──▶ fabric-bridge (:9310) ──peer CLI──▶ peer0
 - bridge 与 peer 同机，负责签名调用与读回校验；
 - 链码 `provenance` 每个 build_id 一个键，同指纹重复提交幂等，异指纹提交被拒。
 
+## 演示与升级
+
+- 课设演示剧本：[docs/FABRIC-DEMO.md](../../docs/FABRIC-DEMO.md)
+- 一键演示：`./demo.sh`（`--auto` 连播，`--skip-build` 只看账本）
+- 链码升级：`./upgrade-cc.sh`（自动递增 sequence，`recent`/`stats` 需要 1.1+）
+- 一致性巡检：`python3 ./verify-ledger.py`
+
 ## 一次性准备
 
 ```bash

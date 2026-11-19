@@ -178,6 +178,90 @@ async def chain_anchor(request: Request, build_id: str):
 
 
 # --------------------------------------------------------------------------- #
+# ledger view: what the chain holds, next to what the database holds
+# --------------------------------------------------------------------------- #
+
+
+async def _ledger_view(conn, limit: int) -> dict:
+    """Join the chain's newest anchors with the local records.
+
+    A build can be in four states, and the demo turns on the distinction:
+      consistent   chain and database agree on the fingerprint
+      local-only   recorded locally but never anchored
+      chain-only   anchored but the local row is gone
+      mismatch     both exist, fingerprints differ (should be impossible)
+    """
+
+    from . import fabric
+
+    chain = fabric.ledger(limit) if fabric.enabled() else None
+    stats = fabric.stats() if fabric.enabled() else None
+    chain_records = (chain or {}).get("records") or []
+    chain_ids = [record.get("build_id") for record in chain_records if record.get("build_id")]
+
+    local_rows = []
+    if chain_ids:
+        local_rows = await conn.fetch(
+            "select build_id, fingerprint, artifact_sha256, created_at "
+            "from build_provenance where build_id = any($1::text[])",
+            chain_ids,
+        )
+    local_by_id = {row["build_id"]: row for row in local_rows}
+
+    comparison = []
+    for record in chain_records:
+        build_id = record.get("build_id") or ""
+        local = local_by_id.get(build_id)
+        if local is None:
+            state, detail = "chain-only", "本地无对应记录"
+        elif local["fingerprint"] != record.get("fingerprint"):
+            state, detail = "mismatch", "链上与本地指纹不一致"
+        else:
+            state, detail = "consistent", "一致"
+        comparison.append(
+            {
+                "build_id": build_id,
+                "state": state,
+                "detail": detail,
+                "chain_fingerprint": record.get("fingerprint"),
+                "local_fingerprint": None if local is None else local["fingerprint"],
+                "artifact_sha256": record.get("artifact_sha256"),
+                "builder": record.get("builder"),
+                "anchored_at": record.get("anchored_at"),
+                "tx_id": record.get("tx_id"),
+            }
+        )
+
+    local_total = await conn.fetchval("select count(*) from build_provenance")
+    anchored_total = await conn.fetchval(
+        "select count(*) from build_provenance where fabric_status = 'anchored'"
+    )
+    return {
+        "chain": {
+            "enabled": fabric.enabled(),
+            "channel": (chain or {}).get("channel"),
+            "chaincode": (chain or {}).get("chaincode"),
+            "block_height": (chain or {}).get("block_height"),
+            "error": (chain or {}).get("error"),
+            "stats": stats,
+        },
+        "totals": {
+            "local_records": local_total,
+            "anchored": anchored_total,
+            "on_chain": len(chain_records),
+            "consistent": sum(1 for item in comparison if item["state"] == "consistent"),
+            "mismatch": sum(1 for item in comparison if item["state"] == "mismatch"),
+        },
+        "comparison": comparison,
+    }
+
+
+@router.get("/v1/fabric/ledger", dependencies=[Depends(require_write_token)])
+async def fabric_ledger(request: Request, limit: int = Query(default=20, ge=1, le=200)):
+    return await _ledger_view(pool(request), limit)
+
+
+# --------------------------------------------------------------------------- #
 # public verification page
 # --------------------------------------------------------------------------- #
 
@@ -293,3 +377,112 @@ async def verify_qr(request: Request, build_id: str):
         raise HTTPException(501, "QR rendering requires the segno package")
     svg = segno.make(target, error="m").svg_inline(scale=4, border=2)
     return Response(svg, media_type="image/svg+xml")
+
+
+# --------------------------------------------------------------------------- #
+# public ledger view
+# --------------------------------------------------------------------------- #
+
+_CHAIN_PAGE = """<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>联盟链账本 · MACP</title>
+<style>
+ :root {{ color-scheme: light dark; }}
+ body {{ font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+        margin: 0; background: #f5f6f8; color: #1c1f23; }}
+ .card {{ max-width: 960px; margin: 32px auto; background: #fff; border-radius: 14px;
+          box-shadow: 0 2px 16px rgba(0,0,0,.08); overflow: hidden; }}
+ .head {{ padding: 22px 26px; background: #0b2e59; color: #fff; }}
+ .head h1 {{ margin: 0 0 6px; font-size: 20px; font-weight: 600; }}
+ .head p {{ margin: 0; opacity: .88; font-size: 13px; }}
+ .stats {{ display: flex; flex-wrap: wrap; gap: 28px; padding: 18px 26px;
+           border-bottom: 1px solid #eceef1; }}
+ .stat b {{ display: block; font-size: 22px; line-height: 1.3; }}
+ .stat span {{ font-size: 12px; color: #646b73; }}
+ table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
+ th {{ text-align: left; padding: 10px 8px; color: #646b73; font-weight: 500;
+       border-bottom: 1px solid #eceef1; font-size: 12px; }}
+ td {{ padding: 10px 8px; border-bottom: 1px solid #f2f4f7; vertical-align: top; }}
+ code {{ font-family: ui-monospace, Consolas, monospace; font-size: 12px;
+         word-break: break-all; }}
+ .ok {{ color: #0a7d33; font-weight: 600; }}
+ .bad {{ color: #b3261e; font-weight: 600; }}
+ .warn {{ color: #ad6800; font-weight: 600; }}
+ .legend {{ padding: 14px 26px 6px; font-size: 12px; color: #646b73; }}
+ .legend code {{ background: #f5f5f5; border-radius: 4px; padding: 1px 5px; }}
+ .foot {{ padding: 12px 26px 22px; font-size: 12px; color: #7a828a; }}
+ .empty {{ padding: 32px 26px; color: #646b73; }}
+</style></head>
+<body><div class="card">
+ <div class="head">
+  <h1>联盟链账本</h1>
+  <p>通道 {channel} · 链码 {chaincode} · 区块高度 {height}</p>
+ </div>
+ <div class="stats">
+  <div class="stat"><b>{on_chain}</b><span>链上锚定</span></div>
+  <div class="stat"><b>{local_records}</b><span>本地构建记录</span></div>
+  <div class="stat"><b>{consistent}</b><span>一致</span></div>
+  <div class="stat"><b>{mismatch}</b><span>不一致</span></div>
+ </div>
+ <div class="legend">
+  判定口径：<code>consistent</code> 链上与本地指纹相同；
+  <code>chain-only</code> 链上有、本地无；<code>mismatch</code> 两边指纹不同。
+ </div>
+ {table}
+ <div class="foot">链上只保存指纹与最小元数据，源码与产物始终留在链下。</div>
+</div></body></html>"""
+
+
+@router.get("/chain", response_class=HTMLResponse)
+async def ledger_page(request: Request, limit: int = Query(default=50, ge=1, le=200)):
+    """Ledger view: what the chain holds, next to what the database holds."""
+
+    view = await _ledger_view(pool(request), limit)
+    totals = view["totals"]
+    chain = view["chain"]
+
+    if not chain["enabled"]:
+        table = '<div class="empty">未配置联盟链（[fabric] enabled = false），此处仅显示本地统计。</div>'
+    elif chain.get("error"):
+        table = f'<div class="empty">链不可达：{html.escape(str(chain["error"]))[:200]}</div>'
+    elif not view["comparison"]:
+        table = '<div class="empty">链上还没有锚定记录。完成一次构建门禁后即可看到。</div>'
+    else:
+        rows = []
+        for item in view["comparison"]:
+            state = item["state"]
+            css = {"consistent": "ok", "chain-only": "warn", "mismatch": "bad"}.get(state, "")
+            label = {
+                "consistent": "✓ 一致",
+                "chain-only": "仅链上",
+                "mismatch": "✗ 不一致",
+            }.get(state, state)
+            rows.append(
+                "<tr>"
+                f"<td><code>{html.escape(item['build_id'])}</code></td>"
+                f'<td class="{css}">{label}</td>'
+                f"<td><code>{(item['chain_fingerprint'] or '')[:16]}…</code></td>"
+                f"<td>{html.escape(item['anchored_at'] or '')}</td>"
+                f"<td><code>{(item['tx_id'] or '')[:12]}…</code></td>"
+                "</tr>"
+            )
+        table = (
+            "<table><thead><tr><th>构建编号</th><th>状态</th><th>链上指纹</th>"
+            "<th>锚定时间</th><th>交易</th></tr></thead><tbody>"
+            + "".join(rows)
+            + "</tbody></table>"
+        )
+
+    return HTMLResponse(
+        _CHAIN_PAGE.format(
+            channel=html.escape(str(chain.get("channel") or "-")),
+            chaincode=html.escape(str(chain.get("chaincode") or "-")),
+            height=html.escape(str(chain.get("block_height") or "-")),
+            on_chain=totals["on_chain"],
+            local_records=totals["local_records"],
+            consistent=totals["consistent"],
+            mismatch=totals["mismatch"],
+            table=table,
+        )
+    )

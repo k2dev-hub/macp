@@ -127,6 +127,7 @@ python3 -m server.settings doctor   # 校验 + 探测已启用的集成
 | 代码导读（新手向） | [docs/WALKTHROUGH.md](docs/WALKTHROUGH.md) |
 | MCP 网关 | [docs/MCP.md](docs/MCP.md) |
 | 联盟链锚定 | [deploy/fabric/README.md](deploy/fabric/README.md) |
+| 上链演示手册（课设） | [docs/FABRIC-DEMO.md](docs/FABRIC-DEMO.md) |
 | 项目官网 | [site/README.md](site/README.md) |
 | 最小审计版 | [deploy/minimal/README.md](deploy/minimal/README.md) |
 

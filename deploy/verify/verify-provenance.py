@@ -22,6 +22,13 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
+
+# --json-out PATH 让调用方（如演示脚本）拿到构建编号，而不必再跑一遍
+JSON_OUT = ""
+for _index, _arg in enumerate(sys.argv):
+    if _arg == "--json-out" and _index + 1 < len(sys.argv):
+        JSON_OUT = sys.argv[_index + 1]
 
 BASE = os.getenv("MACP_BASE", "https://localhost:9443")
 TOKEN_FILE = os.getenv("MACP_TOKEN_FILE", "deploy/secrets/write_token")
@@ -249,6 +256,22 @@ def main() -> int:
         check(
             "record verifies again after restore",
             ((restored or {}).get("verification") or {}).get("verified") is True,
+        )
+
+    if JSON_OUT:
+        Path(JSON_OUT).write_text(
+            json.dumps(
+                {
+                    "build_id": build_id,
+                    "verified": not FAILURES,
+                    "failures": FAILURES,
+                    "fabric_tx_id": record.get("fabric_tx_id"),
+                    "artifact_sha256": record.get("artifact_sha256"),
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
         )
 
     print()

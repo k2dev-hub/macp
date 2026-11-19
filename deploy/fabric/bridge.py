@@ -20,6 +20,7 @@ import re
 import subprocess
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlsplit
 
 CHANNEL = os.getenv("FABRIC_CHANNEL", "macp")
 CHAINCODE = os.getenv("FABRIC_CC_NAME", "provenance")
@@ -47,14 +48,20 @@ def cli(*args: str, timeout: int = 60) -> tuple[int, str]:
     return result.returncode, (result.stdout or "") + (result.stderr or "")
 
 
-def query_chaincode(build_id: str) -> tuple[int, str]:
+def query_function(function: str, args: list[str]) -> tuple[int, str]:
+    """Read-only chaincode query (no transaction, no ordering)."""
+
     return cli(
         "chaincode", "query",
         "--channelID", CHANNEL,
         "--name", CHAINCODE,
-        "-c", json.dumps({"function": "query", "Args": [build_id]}),
-        timeout=30,
+        "-c", json.dumps({"function": function, "Args": args}),
+        timeout=45,
     )
+
+
+def query_chaincode(build_id: str) -> tuple[int, str]:
+    return query_function("query", [build_id])
 
 
 def anchor(payload: dict) -> dict:
@@ -169,6 +176,12 @@ class Handler(BaseHTTPRequestHandler):
                 "detail": output.strip()[-200:] if code else "",
             })
             return
+        if self.path.startswith("/ledger") or self.path == "/stats":
+            if not self._authorised():
+                self._send(401, {"error": "unauthorised"})
+                return
+            self._serve_ledger()
+            return
         prefix = "/anchor/"
         if self.path.startswith(prefix):
             if not self._authorised():
@@ -188,6 +201,53 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, {"found": True, "record": record})
             return
         self._send(404, {"error": "not found"})
+
+    def _serve_ledger(self) -> None:
+        """GET /ledger?limit=N  and  GET /stats.
+
+        Both are read-only chaincode queries, so the bridge can serve them
+        without a transaction.  The ledger view and the consistency check use these to
+        compare the chain against the local database.
+        """
+
+        parsed = urlsplit(self.path)
+        if parsed.path == "/stats":
+            code, output = query_function("stats", [])
+            if code != 0:
+                self._send(502, {"error": output.strip()[-300:]})
+                return
+            try:
+                self._send(200, json.loads(output.strip().splitlines()[-1]))
+            except ValueError:
+                self._send(502, {"error": "unparsable stats output"})
+            return
+
+        limit = 20
+        query = parse_qs(parsed.query)
+        if query.get("limit"):
+            try:
+                limit = max(1, min(200, int(query["limit"][0])))
+            except ValueError:
+                self._send(400, {"error": "limit must be an integer"})
+                return
+
+        code, output = query_function("recent", [str(limit)])
+        if code != 0:
+            self._send(502, {"error": output.strip()[-300:]})
+            return
+        try:
+            records = json.loads(output.strip().splitlines()[-1])
+        except ValueError:
+            self._send(502, {"error": "unparsable ledger output"})
+            return
+        block = channel_height()
+        self._send(200, {
+            "channel": CHANNEL,
+            "chaincode": CHAINCODE,
+            "block_height": None if block is None else block + 1,
+            "count": len(records),
+            "records": records,
+        })
 
     def do_POST(self) -> None:  # noqa: N802 - http.server API
         if self.path != "/anchor":

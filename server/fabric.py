@@ -102,3 +102,41 @@ def query(build_id: str, timeout: float = 10.0) -> dict[str, Any] | None:
         return {"found": False, "error": f"HTTP {exc.code}"}
     except Exception as exc:
         return {"found": False, "error": str(exc)[:200]}
+
+
+def ledger(limit: int = 20, timeout: float = 20.0) -> dict[str, Any] | None:
+    """Newest anchors on the chain, for the ledger view."""
+
+    url = _base_url()
+    if not url:
+        return None
+    request = urllib.request.Request(f"{url}/ledger?limit={max(1, min(200, limit))}")
+    token = _token()
+    if token:
+        request.add_header("Authorization", "Bearer " + token)
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        return {"error": f"HTTP {exc.code}: {exc.read().decode(errors='replace')[:200]}"}
+    except Exception as exc:
+        return {"error": str(exc)[:200]}
+
+
+def stats(timeout: float = 15.0) -> dict[str, Any] | None:
+    """Totals and time span of the ledger."""
+
+    url = _base_url()
+    if not url:
+        return None
+    request = urllib.request.Request(url + "/stats")
+    token = _token()
+    if token:
+        request.add_header("Authorization", "Bearer " + token)
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        return {"error": f"HTTP {exc.code}"}
+    except Exception as exc:
+        return {"error": str(exc)[:200]}

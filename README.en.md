@@ -139,6 +139,7 @@ device. See [docs/CONFIG.md](docs/CONFIG.md).
 | Code walkthrough (for newcomers) | [docs/WALKTHROUGH.md](docs/WALKTHROUGH.md) |
 | MCP gateway | [docs/MCP.md](docs/MCP.md) |
 | Consortium anchoring | [deploy/fabric/README.md](deploy/fabric/README.md) |
+| Consortium demo handbook | [docs/FABRIC-DEMO.md](docs/FABRIC-DEMO.md) |
 | Project site | [site/README.md](site/README.md) |
 | Minimal audit edition | [deploy/minimal/README.md](deploy/minimal/README.md) |
 
