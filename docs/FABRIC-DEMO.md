@@ -35,15 +35,19 @@ docker ps --filter name=macp-fabric --format "{{.Names}} {{.Status}}"
 systemctl is-active macp-fabric-bridge
 curl -s http://172.28.0.1:9310/health
 
-# 3) 链码版本（本次演示需要 recent/stats，即 1.1）
+# 3) 宿主机防火墙放行两个 docker 网段（172.28 MACP / 172.19 Fabric）
+#    重启后 dockerd 会把 bridge-nf 改回 1，这条命令要再跑一次
+sh deploy/hostfw/docker-allow.sh
+
+# 4) 链码版本（本次演示需要 recent/stats，即 1.1）
 docker exec macp-fabric-cli peer lifecycle chaincode querycommitted \
   --channelID macp --name provenance | grep -E "Version|Sequence"
 
-# 4) 主栈健康
+# 5) 主栈健康
 curl -sk https://localhost:9443/v1/health
 ```
 
-如果第 3 步显示的版本低于 1.1（没有 `recent`/`stats`），升级一次：
+如果第 4 步显示的版本低于 1.1（没有 `recent`/`stats`），升级一次：
 
 ```bash
 cd deploy/fabric && ./upgrade-cc.sh
@@ -95,9 +99,17 @@ curl -sk -H "Authorization: Bearer $(cat deploy/secrets/write_token)" \
 
 或直接打开页面：**`https://localhost:9443/chain`**
 
-**说**：页面把"链上最近 50 条"与"本地数据库"逐条对照。`consistent` 表示两边指纹相同。
-`chain-only` 表示链上有、本地没有（例如数据库从旧备份恢复过）；`mismatch` 在正常系统里
-应当永远为 0。
+**说**：页面把"链上最近 50 条"与"本地数据库"逐条对照。四种状态：
+
+| 状态 | 含义 | 是否正常 |
+|---|---|---|
+| `consistent` | 两边指纹相同 | 正常 |
+| `chain-only` | 链上有、本地已无（数据库重置或归档过） | 正常，链只增不删 |
+| `local-only` | 本地有、从未锚定（链不可达时发生过） | 需要补锚 |
+| `mismatch` | 两边指纹不同 | 永远不应出现 |
+
+演示环境里数据库被重置过，所以会看到一批 `chain-only`——这恰好可以讲
+"链上凭证比数据库活得更久"。
 
 ### 第 4 幕 · 全量巡检（1 分钟）
 
@@ -229,6 +241,8 @@ SHA-256 的十六进制表示。链码会校验长度，防止把别的字段误
 | `stats` 报 `unknown function` | 链码还是 1.0，跑 `./upgrade-cc.sh` |
 | 记录 `fabric_status=failed` | 链恢复后重跑 `verify-provenance.py`，或对该条重新 `POST /anchor` |
 | 验证页打不开 | 确认 MACP 主栈：`docker ps | grep macp-api`，再 `curl -k /v1/health` |
+| `context deadline exceeded` | 宿主防火墙没放行 172.19.0.0/16：跑 `sh deploy/hostfw/docker-allow.sh` |
+| `fabric_tx_id` 与指纹相同 | 旧版桥接的已知缺陷，升级到含读回重试的版本即可 |
 | 演示机断网 | 单机演示不需要外网；只有 `[fabric]` 指向外部链时才需要 |
 
 ---

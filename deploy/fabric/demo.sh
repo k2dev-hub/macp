@@ -31,12 +31,21 @@ ok()    { printf '  %s✓%s %s\n' "$GREEN" "$OFF" "$*"; }
 bad()   { printf '  %s✗%s %s\n' "$RED" "$OFF" "$*"; }
 pause() { [ "$AUTO" -eq 1 ] && return 0; printf '\n%s（回车继续）%s' "$DIM" "$OFF"; read -r _; }
 
-TOKEN="$(cat deploy/secrets/write_token 2>/dev/null)"
+TOKEN="$(cat deploy/secrets/write_token 2>/dev/null || true)"
 [ -n "$TOKEN" ] || { echo "找不到 deploy/secrets/write_token，先在仓库根运行 ./deploy/bootstrap.sh"; exit 1; }
-HOST_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
-PUBLIC="${MACP_PUBLIC_URL:-https://${HOST_IP:-localhost}:9443}"
+detect_public() {
+  local ip
+  for ip in $(hostname -I 2>/dev/null); do
+    if curl -sk -o /dev/null --max-time 3 "https://$ip:9443/v1/health" 2>/dev/null; then
+      printf 'https://%s:9443' "$ip"
+      return
+    fi
+  done
+  printf 'https://localhost:9443'
+}
+PUBLIC="${MACP_PUBLIC_URL:-$(detect_public)}"
 FABRIC_URL="${MACP_FABRIC_URL:-http://172.28.0.1:9310}"
-FABRIC_TOKEN="$(cat deploy/secrets/fabric_bridge_token 2>/dev/null)"
+FABRIC_BRIDGE_TOKEN="$(cat deploy/secrets/fabric_bridge_token 2>/dev/null || true)"
 
 # ---------------------------------------------------------------- 0. 开场
 clear 2>/dev/null
@@ -105,10 +114,10 @@ if not chain.get("enabled"):
 print(f"  通道 {chain.get('channel')} · 链码 {chain.get('chaincode')} · 区块高度 {chain.get('block_height')}")
 print(f"  本地记录 {totals.get('local_records')} · 已锚定 {totals.get('anchored')} · 链上 {totals.get('on_chain')}")
 print()
-print(f"  {'状态':<10}{'构建编号':<18}{'链上指纹':<20}{'锚定时间':<21}")
+print(f"  {'状态':<12}{'构建编号':<18}{'链上指纹':<20}{'锚定时间':<21}")
 print("  " + "-" * 70)
 for item in (view.get("comparison") or []):
-    print(f"  {item['state']:<10}{item['build_id']:<18}"
+    print(f"  {item['state']:<12}{item['build_id']:<18}"
           f"{(item['chain_fingerprint'] or '')[:16]:<20}{(item['anchored_at'] or '')[:19]:<21}")
 PY
 dim "consistent = 链上与本地指纹一致；mismatch 在正常系统里应当永远为 0。"
@@ -117,7 +126,7 @@ pause
 # ---------------------------------------------------------------- 4. 核对
 act "第 4 幕 · 全量核对：链上每一条都对回数据库"
 
-python3 deploy/fabric/verify-ledger.py --limit 200 2>&1 | sed 's/^/  /'
+MACP_BASE="$PUBLIC" python3 deploy/fabric/verify-ledger.py --limit 200 2>&1 | sed 's/^/  /'
 pause
 
 # ---------------------------------------------------------------- 5. 收尾
