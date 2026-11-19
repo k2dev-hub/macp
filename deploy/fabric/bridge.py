@@ -129,10 +129,18 @@ def extract_tx_id(text: str) -> str | None:
 
 
 def channel_height() -> int | None:
+    """Height of the channel, or None when the peer cannot answer.
+
+    Fabric 2.5 prints the info as JSON (`{"height":42,...}`), older releases
+    print `Block Height: 42`; accept both.
+    """
+
     code, output = cli("channel", "getinfo", "-c", CHANNEL, timeout=20)
     if code != 0:
         return None
-    match = re.search(r"Block Height:\s*(\d+)", output)
+    match = re.search(r'"height"\s*:\s*(\d+)', output) or re.search(
+        r"Block Height:\s*(\d+)", output
+    )
     return int(match.group(1)) - 1 if match else None
 
 
@@ -140,7 +148,7 @@ def extract_block(text: str) -> int | None:
     match = re.search(r"block_num[=:]\s*(\d+)", text)
     if match:
         return int(match.group(1))
-    match = re.search(r"height[=:]\s*(\d+)", text)
+    match = re.search(r'"?height"?\s*[=:]\s*(\d+)', text)
     if match:
         return int(match.group(1)) - 1
     return None
