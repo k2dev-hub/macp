@@ -313,8 +313,9 @@ async def workload(request: Request):
                      where s.agent_id = a.id and s.state in ('offered','claimed','active')) as active_assignments,
                    (select count(*) from assignments s
                      where s.agent_id = a.id and s.created_at > now() - interval '24 hours') as assignments_24h,
-                   (select count(*) from tasks tk
-                     where tk.project_id = a.project_id and tk.state = 'blocked'
+                   (select count(distinct tk.id) from tasks tk
+                     join assignments s2 on s2.task_id = tk.id and s2.agent_id = a.id
+                     where tk.state = 'blocked'
                        and tk.updated_at > now() - interval '24 hours') as blocked_24h
             from agents a
             left join tasks t on t.id = a.current_task_id
