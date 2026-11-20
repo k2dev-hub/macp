@@ -74,6 +74,7 @@ function ProjectsPage() {
     await api.createProject({ code: values.code, name: values.name });
     message.success("项目已创建");
     setCreating(false);
+    window.dispatchEvent(new Event("macp:projects-changed"));
     await reload();
   };
 
@@ -83,6 +84,7 @@ function ProjectsPage() {
     await api.renameProject(editing.code, values.name);
     message.success("已保存");
     setEditing(null);
+    window.dispatchEvent(new Event("macp:projects-changed"));
     await reload();
   };
 

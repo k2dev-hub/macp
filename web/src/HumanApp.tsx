@@ -194,7 +194,14 @@ export default function HumanApp() {
 
   useEffect(() => {
     if (!token) return;
-    void api.projects().then(setProjects).catch(() => setProjects([]));
+    const loadProjects = () => {
+      void api.projects().then(setProjects).catch(() => setProjects([]));
+    };
+    loadProjects();
+    // 新建/改名后由管理页发事件，侧栏跟着刷新，不用整页重载
+    const onChanged = () => loadProjects();
+    window.addEventListener("macp:projects-changed", onChanged);
+    return () => window.removeEventListener("macp:projects-changed", onChanged);
   }, [token]);
 
   useEffect(() => {
