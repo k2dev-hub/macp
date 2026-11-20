@@ -280,8 +280,14 @@ function ChainPage() {
 function AgentsPage() {
   const { data, error, loading, reload } = useLoader(() => api.uiAgents());
   const [editing, setEditing] = useState<AgentRow | null>(null);
+  const [onlyOnline, setOnlyOnline] = useState(false);
   const [form] = Form.useForm();
   const providers = data?.providers ?? [];
+  const rows = useMemo(() => {
+    const list = [...(data?.agents ?? [])];
+    list.sort((a, b) => Number(Boolean(b.online)) - Number(Boolean(a.online)));
+    return onlyOnline ? list.filter((row) => row.online) : list;
+  }, [data, onlyOnline]);
 
   const open = (row: AgentRow) => {
     setEditing(row);
@@ -317,6 +323,10 @@ function AgentsPage() {
   const columns: ColumnsType<AgentRow> = [
     { title: "Agent", dataIndex: "code", width: 150,
       render: (v: string) => <Text strong>{v}</Text> },
+    { title: "在跑", dataIndex: "online", width: 90,
+      render: (online: boolean, row) => (online
+        ? <Tag color="green">在线</Tag>
+        : <Tag>{row.heartbeat_age_seconds == null ? "未接入" : "离线"}</Tag>) },
     { title: "角色", dataIndex: "role", width: 100, render: (v: string) => <Tag>{v}</Tag> },
     { title: "状态", dataIndex: "status", width: 110,
       render: (v: string) => <Tag color={STATUS_COLOR[v] ?? "default"}>{v}</Tag> },
@@ -337,9 +347,14 @@ function AgentsPage() {
     <div className="page">
       <Title level={4}>Agent 管理</Title>
       {error ? <Alert type="error" message={error} showIcon style={{ marginBottom: 12 }} /> : null}
-      <Card extra={<Button icon={<ReloadOutlined />} onClick={reload}>刷新</Button>}>
+      <Card extra={<Space>
+        <Button size="small" onClick={() => setOnlyOnline((value) => !value)}>
+          {onlyOnline ? "显示全部" : "只看在跑"}
+        </Button>
+        <Button icon={<ReloadOutlined />} onClick={reload}>刷新</Button>
+      </Space>}>
         <Table rowKey="code" size="small" loading={loading} columns={columns}
-          dataSource={data?.agents ?? []} pagination={false} />
+          dataSource={rows} pagination={false} />
       </Card>
 
       <Drawer title={`配置 ${editing?.code ?? ""}`} width={430} open={!!editing} onClose={() => setEditing(null)}
@@ -402,6 +417,7 @@ function WorkloadPage() {
                     <Space direction="vertical" size={4} style={{ width: "100%" }}>
                       <Space>
                         <Text strong>{agent.code}</Text>
+                        <Tag color={agent.online ? "green" : undefined}>{agent.online ? "在线" : "离线"}</Tag>
                         <Tag color={STATUS_COLOR[agent.status] ?? "default"}>{agent.status}</Tag>
                         <Tag>{agent.role}</Tag>
                       </Space>

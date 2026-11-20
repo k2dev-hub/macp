@@ -205,6 +205,7 @@ async def list_ui_agents(request: Request):
             """
             select a.code, a.role, a.status, a.model_policy, a.capabilities,
                    a.allowed_paths, a.heartbeat_at, t.code as current_task,
+                   extract(epoch from (now() - a.heartbeat_at))::int as heartbeat_age,
                    (select name from llm_providers p where p.agent_code = a.code
                      and p.project_id = a.project_id order by p.updated_at desc limit 1) as provider,
                    (select model from llm_providers p where p.agent_code = a.code
@@ -233,6 +234,8 @@ async def list_ui_agents(request: Request):
                 "allowed_paths": row["allowed_paths"] or [],
                 "current_task": row["current_task"],
                 "heartbeat_at": row["heartbeat_at"].isoformat() if row["heartbeat_at"] else None,
+                "heartbeat_age_seconds": row["heartbeat_age"],
+                "online": row["heartbeat_age"] is not None and row["heartbeat_age"] <= 120,
                 "provider": row["provider"],
                 "provider_model": row["provider_model"],
             }
@@ -309,6 +312,7 @@ async def workload(request: Request):
             """
             select a.code, a.role, a.status, a.capabilities, a.allowed_paths,
                    t.code as current_task, t.title as current_title, t.state as current_state,
+                   extract(epoch from (now() - a.heartbeat_at))::int as heartbeat_age,
                    (select count(*) from assignments s
                      where s.agent_id = a.id and s.state in ('offered','claimed','active')) as active_assignments,
                    (select count(*) from assignments s
@@ -356,6 +360,8 @@ async def workload(request: Request):
                 "current_task": row["current_task"],
                 "current_title": row["current_title"],
                 "current_state": row["current_state"],
+                "heartbeat_age_seconds": row["heartbeat_age"],
+                "online": row["heartbeat_age"] is not None and row["heartbeat_age"] <= 120,
                 "active_assignments": row["active_assignments"],
                 "assignments_24h": row["assignments_24h"],
                 "blocked_24h": row["blocked_24h"],

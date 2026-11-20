@@ -6,7 +6,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 
-from .common import heartbeat, request
+from .common import heartbeat, report_alive, request
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("macp.coordinator")
@@ -171,6 +171,7 @@ async def main() -> None:
     log.info("coordinator started")
     while True:
         heartbeat()
+        report_alive(COORDINATOR)
         status, projects = await asyncio.to_thread(request, "GET", "/v1/projects")
         if status == 200:
             for project in projects:

@@ -30,6 +30,33 @@ def heartbeat() -> None:
         pass
 
 
+_LAST_REPORT = 0.0
+REPORT_INTERVAL = float(os.getenv("MACP_HEARTBEAT_INTERVAL", "30"))
+
+
+def report_alive(name: str, force: bool = False) -> None:
+    """Tell the server this agent process is up.
+
+    The health file only proves the container runs; without this the console
+    cannot tell a live agent from a seeded row that has no process behind it.
+    Throttled, and never raises: a platform hiccup must not stop the loop.
+    """
+
+    global _LAST_REPORT
+    now = time.time()
+    if not force and now - _LAST_REPORT < REPORT_INTERVAL:
+        return
+    _LAST_REPORT = now
+    try:
+        req = urllib.request.Request(
+            f"{BASE}/v1/agents/{name}/heartbeat", data=b"", method="POST", headers=HEADERS
+        )
+        with urllib.request.urlopen(req, timeout=8):
+            pass
+    except Exception:
+        pass
+
+
 def request(
     method: str,
     path: str,

@@ -1468,6 +1468,30 @@ async def recycle_task(code: str, request: Request):
     return {"code": code, "state": "ready", "version": version, "attempt": next_attempt}
 
 
+@router.post("/agents/{agent_code}/heartbeat", status_code=204)
+async def agent_heartbeat(agent_code: str, request: Request):
+    """Liveness ping from a running agent process.
+
+    The container healthcheck only proves the process is up; this is what lets
+    the console tell a running agent from a seeded row that has no process.
+    """
+
+    async with pool(request).acquire() as conn:
+        updated = await conn.fetchval(
+            """
+            update agents
+               set heartbeat_at = now(),
+                   status = case when status in ('offline', 'dead') then 'idle' else status end
+             where code = $1 and project_id = $2
+            returning code
+            """,
+            agent_code,
+            current_project().id,
+        )
+    if not updated:
+        raise HTTPException(404, "agent not found")
+
+
 @router.post("/agents/{agent_code}/events", status_code=202)
 async def agent_event(
     agent_code: str,

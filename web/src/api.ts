@@ -217,12 +217,14 @@ export interface AgentRow {
   code: string; role: string; status: string; model_policy: Record<string, unknown>;
   capabilities: string[]; allowed_paths: string[]; current_task: string | null;
   heartbeat_at: string | null; provider: string | null; provider_model: string | null;
+  heartbeat_age_seconds?: number | null; online?: boolean;
 }
 export interface ProviderRow { id: string; agent_code: string; name: string; model: string; base_url: string; enabled: boolean; }
 export interface WorkloadPayload {
   agents: Array<{ code: string; role: string; status: string; capabilities: string[]; allowed_paths: string[];
     current_task: string | null; current_title: string | null; current_state: string | null;
-    active_assignments: number; assignments_24h: number; blocked_24h: number }>;
+    active_assignments: number; assignments_24h: number; blocked_24h: number;
+    heartbeat_age_seconds?: number | null; online?: boolean }>;
   by_state: Array<{ state: string; count: number }>;
   in_flight: Array<{ code: string; title: string; state: string; agent: string | null; updated_at: string }>;
 }

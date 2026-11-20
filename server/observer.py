@@ -543,6 +543,7 @@ async def main() -> None:
     try:
         while True:
             try:
+                await touch_observer(pool)
                 summaries = await run_once(pool)
                 for summary in summaries:
                     log.info(
@@ -558,6 +559,20 @@ async def main() -> None:
             await asyncio.sleep(INTERVAL)
     finally:
         await pool.close()
+
+
+async def touch_observer(pool) -> None:
+    """Observer runs outside the agent image, so it reports liveness by SQL."""
+
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "update agents set heartbeat_at=now(), "
+                "status = case when status in ('offline','dead') then 'idle' else status end "
+                "where code = 'observer-1'"
+            )
+    except Exception:
+        pass
 
 
 async def run_once(pool) -> list[dict]:

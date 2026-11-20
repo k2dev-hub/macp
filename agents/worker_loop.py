@@ -12,7 +12,7 @@ import logging
 import os
 import sys
 
-from .common import heartbeat, request
+from .common import heartbeat, report_alive, request
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("macp.worker")
@@ -144,6 +144,7 @@ async def worker(name: str) -> None:
     log.info("worker %s started", name)
     while True:
         heartbeat()
+        report_alive(name)
         status, projects = await asyncio.to_thread(request, "GET", "/v1/projects")
         processed = False
         if status == 200:
