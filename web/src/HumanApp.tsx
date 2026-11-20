@@ -10,11 +10,14 @@ import {
   DashboardOutlined, FileTextOutlined, KeyOutlined, LockOutlined, LoginOutlined, LogoutOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined, PlusOutlined, ReloadOutlined, RobotOutlined,
   SafetyCertificateOutlined, TeamOutlined, ThunderboltOutlined, UnorderedListOutlined,
-  UploadOutlined, UserOutlined,
+  UploadOutlined, UserOutlined, ProjectOutlined, InboxOutlined, PartitionOutlined,
+  DeploymentUnitOutlined, ClusterOutlined, ExperimentOutlined,
 } from "@ant-design/icons";
 import type { EChartsOption } from "echarts";
 import { api, getProject, getToken, setProject, setToken } from "./api";
 import EChart from "./EChart";
+import { AdminPage, adminPageKeys } from "./AdminPages";
+import type { UiPageKey } from "./AdminPages";
 import type {
   Agent, AlertRow, Approval, DocumentMeta, EventItem, Lease, LlmProvider,
   Metrics, Overview, Task, TaskDetail, TaskState,
@@ -50,7 +53,10 @@ const KEY_EVENTS = new Set([
   "merge.reverted", "merge.requeued", "approval.requested", "approval.approved",
   "approval.denied", "alert.opened", "alert.cleared", "budget.exhausted",
 ]);
-const ADMIN_PAGES = new Set(["approvals", "leases", "alerts", "llm"]);
+const ADMIN_PAGES = new Set([
+  "approvals", "leases", "alerts", "llm",
+  "projects", "artifacts", "chain", "agents-admin", "workload", "models",
+]);
 const BAR_COLOR: Record<string, string> = {
   ready: "#98a2b3", assigned: "#2563eb", in_progress: "#4f46e5", blocked: "#e5484d",
   review: "#d97706", accepted: "#059669", merged: "#0f766e",
@@ -792,6 +798,7 @@ export default function HumanApp() {
     if (page === "tasks") return tasksPage();
     if (page === "agents") return agentsPage();
     if (page === "events") return eventsPage();
+    if (adminPageKeys.includes(page as UiPageKey)) return <AdminPage page={page as UiPageKey} />;
     return adminPage(page);
   };
 
@@ -815,7 +822,17 @@ export default function HumanApp() {
           { key: "alerts", icon: <AlertOutlined />, label: alerts.length ? `告警 ${alerts.length}` : "告警" },
           { key: "llm", icon: <CloudServerOutlined />, label: "LLM 配置" },
           { key: "api", icon: <ApiOutlined />, label: "API 与版本" },
-        ].filter((item) => token || !ADMIN_PAGES.has(item.key))} />
+          { type: "divider" as const },
+          { key: "projects", icon: <ProjectOutlined />, label: "项目管理" },
+          { key: "artifacts", icon: <InboxOutlined />, label: "产物与证据" },
+          { key: "chain", icon: <ClusterOutlined />, label: "上链情况" },
+          { key: "agents-admin", icon: <DeploymentUnitOutlined />, label: "Agent 管理" },
+          { key: "workload", icon: <PartitionOutlined />, label: "分工看板" },
+          { key: "models", icon: <ExperimentOutlined />, label: "模型指派" },
+        ].filter((item) => {
+          if (item.type === "divider") return Boolean(token);
+          return token || !ADMIN_PAGES.has(String(item.key));
+        })} />
         <div className="sider-foot">
           <div><Badge status={connected ? "processing" : "error"} text={connected ? "实时连接" : "连接中断"} /><div><Text type="secondary">{token ? "管理员模式" : "只读访客"}</Text></div></div>
           <Text type="secondary">v0.2.0</Text>

@@ -81,6 +81,24 @@ function errorText(path: string, status: number, payload: unknown): string {
   return `${path}: HTTP ${status}`;
 }
 
+async function download(path: string, filename: string) {
+  const token = getToken();
+  if (!token) throw new Error("请先在右上角配置管理员 Token");
+  const response = await fetch(path, {
+    headers: { Authorization: `Bearer ${token}`, "X-MACP-Project": getProject() },
+  });
+  if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
 export const api = {
   overview: () => get<Overview>("/v1/overview"),
   tasks: () => get<Task[]>("/v1/tasks"),
@@ -168,4 +186,51 @@ export const api = {
       }
       return (await response.json()) as { access_token: string };
     }),
+
+  // ---- 管理页 ----
+  uiProjects: () => get<ProjectRow[]>("/v1/ui/projects", true),
+  createProject: (body: { code: string; name: string }) =>
+    send<{ code: string }>("POST", "/v1/projects", body),
+  renameProject: (code: string, name: string) =>
+    send<{ code: string }>("PATCH", `/v1/ui/projects/${code}`, { name }),
+  uiArtifacts: (limit = 40) => get<ArtifactsPayload>(`/v1/ui/artifacts?limit=${limit}`, true),
+  downloadEvidence: (id: string) => download(`/v1/ui/artifacts/${id}/download`, `evidence-${id.slice(0, 8)}`),
+  downloadStamp: (buildId: string) => download(`/v1/provenance/${buildId}/stamp.zip`, `${buildId}.stamp.zip`),
+  uiAgents: () => get<AgentsPayload>("/v1/ui/agents", true),
+  updateAgent: (code: string, body: Record<string, unknown>) =>
+    send<{ code: string }>("PATCH", `/v1/ui/agents/${code}`, body),
+  uiWorkload: () => get<WorkloadPayload>("/v1/ui/workload", true),
+  uiChain: () => get<ChainPayload>("/v1/ui/chain", true),
 };
+export interface ProjectRow { code: string; name: string; tasks: number; agents: number; created_at: string; updated_at: string; current: boolean; }
+export interface ArtifactsPayload { evidence: EvidenceRow[]; builds: BuildRow[]; }
+export interface EvidenceRow {
+  id: string; kind: string; media_type: string; size_bytes: number; sha256: string;
+  task: string | null; gate: string | null; exit_code: number | null; created_at: string; downloadable: boolean;
+}
+export interface BuildRow {
+  build_id: string; task: string; gate: string; artifact_name: string | null; artifact_sha256: string | null;
+  artifact_size: number | null; fabric_status: string | null; fabric_tx_id: string | null; created_at: string;
+}
+export interface AgentsPayload { agents: AgentRow[]; providers: ProviderRow[]; }
+export interface AgentRow {
+  code: string; role: string; status: string; model_policy: Record<string, unknown>;
+  capabilities: string[]; allowed_paths: string[]; current_task: string | null;
+  heartbeat_at: string | null; provider: string | null; provider_model: string | null;
+}
+export interface ProviderRow { id: string; agent_code: string; name: string; model: string; base_url: string; enabled: boolean; }
+export interface WorkloadPayload {
+  agents: Array<{ code: string; role: string; status: string; capabilities: string[]; allowed_paths: string[];
+    current_task: string | null; current_title: string | null; current_state: string | null;
+    active_assignments: number; assignments_24h: number; blocked_24h: number }>;
+  by_state: Array<{ state: string; count: number }>;
+  in_flight: Array<{ code: string; title: string; state: string; agent: string | null; updated_at: string }>;
+}
+export interface ChainPayload {
+  totals: { builds: number; anchored: number; failed: number; unanchored: number };
+  fabric: { enabled: boolean; channel: string | null; chaincode: string | null; block_height: number | null;
+    total: number | null; last_anchored: string | null; error: string | null; recent: Array<Record<string, unknown>> };
+  builds: Array<{ build_id: string; task: string; artifact: string | null; status: string | null;
+    tx_id: string | null; block: number | null; anchored_at: string | null; created_at: string }>;
+  audit_anchors: Array<{ day: string; seq: number; hash: string; created_at: string }>;
+}

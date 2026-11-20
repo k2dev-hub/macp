@@ -29,6 +29,7 @@ from .provenance_api import router as provenance_router
 from .tool_registry import router as tool_router
 from .merge_api import router as merge_router
 from .audit_api import router as audit_router
+from .admin_ui_api import router as admin_ui_router
 from .settings import SETTINGS as settings
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
@@ -63,6 +64,7 @@ app.include_router(provenance_router)
 app.include_router(tool_router)
 app.include_router(merge_router)
 app.include_router(audit_router)
+app.include_router(admin_ui_router)
 
 log = logging.getLogger("macp.api")
 if not log.handlers:
