@@ -209,13 +209,25 @@ function ProjectsPage({ onNavigate }: { onNavigate: (page: string) => void }) {
 
       <Modal title="新建项目" width={640} open={wizard} onCancel={() => setWizard(false)}
         onOk={() => (step < 2 ? setStep(step + 1) : submit())}
+        maskClosable={false}
         okText={step < 2 ? "下一步" : "创建"}
         cancelText={step === 0 ? "取消" : "上一步"}
         footer={[
           <Button key="back" onClick={() => (step === 0 ? setWizard(false) : setStep(step - 1))}>
             {step === 0 ? "取消" : "上一步"}
           </Button>,
-          <Button key="next" type="primary" onClick={() => (step < 2 ? setStep(step + 1) : submit())}>
+          <Button key="next" type="primary" onClick={async () => {
+            if (step === 0) {
+              // 基本信息填完才允许进下一步，避免一路点到确认页才发现没填
+              try {
+                await form.validateFields(["code", "name"]);
+              } catch {
+                return;
+              }
+            }
+            if (step < 2) setStep(step + 1);
+            else await submit();
+          }}>
             {step < 2 ? "下一步" : "创建项目"}
           </Button>,
         ]}>
