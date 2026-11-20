@@ -803,6 +803,7 @@ export default function HumanApp() {
     alerts: ["告警", "Observer 产生的运行异常"],
     llm: ["LLM 配置", "地址、模型与密钥的加密配置"],
     api: ["API 与版本", "服务入口、健康检查与 OpenAPI"],
+    guide: ["使用指引", "从配置模型到看上链的四步"],
     projects: ["项目管理", "新建、改名与切换项目"],
     artifacts: ["产物与证据", "构建溯源、标签包与门禁日志下载"],
     chain: ["上链情况", "本地记录与联盟链账本的对照"],
