@@ -796,6 +796,12 @@ export default function HumanApp() {
     alerts: ["告警", "Observer 产生的运行异常"],
     llm: ["LLM 配置", "地址、模型与密钥的加密配置"],
     api: ["API 与版本", "服务入口、健康检查与 OpenAPI"],
+    projects: ["项目管理", "新建、改名与切换项目"],
+    artifacts: ["产物与证据", "构建溯源、标签包与门禁日志下载"],
+    chain: ["上链情况", "本地记录与联盟链账本的对照"],
+    "agents-admin": ["Agent 管理", "角色、状态、能力与允许路径"],
+    workload: ["分工看板", "每个 Agent 在做什么、负载与在办任务"],
+    models: ["模型指派", "为 Agent 选择模型来源与模型名"],
   };
   const content = () => {
     if (page === "overview") return overviewPage();
@@ -846,7 +852,10 @@ export default function HumanApp() {
         <Header className="topbar">
           <Space size={12}>
             <Button type="text" icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={() => setCollapsed((v) => !v)} />
-            <div><Title level={4}>{pageTitle[page][0]}</Title><Text type="secondary">{pageTitle[page][1]}</Text></div>
+            <div>
+                <Title level={4}>{(pageTitle[page] ?? ["未命名页面", ""])[0]}</Title>
+                <Text type="secondary">{(pageTitle[page] ?? ["", ""])[1]}</Text>
+              </div>
           </Space>
           <Space wrap>
             {token ? (
