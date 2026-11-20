@@ -189,8 +189,11 @@ export const api = {
 
   // ---- 管理页 ----
   uiProjects: () => get<ProjectRow[]>("/v1/ui/projects", true),
-  createProject: (body: { code: string; name: string }) =>
-    send<{ code: string }>("POST", "/v1/projects", body),
+  createProject: (body: {
+    code: string;
+    name: string;
+    team?: Array<{ code: string; provider_id: string; model?: string }>;
+  }) => send<{ code: string; id: string }>("POST", "/v1/projects", body),
   renameProject: (code: string, name: string) =>
     send<{ code: string }>("PATCH", `/v1/ui/projects/${code}`, { name }),
   uiArtifacts: (limit = 40) => get<ArtifactsPayload>(`/v1/ui/artifacts?limit=${limit}`, true),

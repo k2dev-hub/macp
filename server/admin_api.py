@@ -189,27 +189,82 @@ async def create_project(
                 if "duplicate key" in str(exc):
                     raise HTTPException(409, "project code already exists") from exc
                 raise
-            agent_specs = [
-                ("coordinator-1", "coordinator"),
-                ("observer-1", "observer"),
-                ("worker-e", "worker"),
-                ("worker-f", "worker"),
-                ("worker-g", "worker"),
-                ("worker-smoke", "worker"),
-                ("worker-llm", "worker"),
-                ("worker-deepseek", "worker"),
-            ]
-            for agent_code, role in agent_specs:
+            # 团队：调用方可以自带（每个 worker 绑定一个模型供应商），
+            # 不传则用默认的一整套。
+            team = body.get("team")
+            if isinstance(team, list) and team:
+                specs: list[tuple[str, str, dict | None]] = [
+                    ("coordinator-1", "coordinator", None),
+                    ("observer-1", "observer", None),
+                ]
+                for index, item in enumerate(team, start=1):
+                    if not isinstance(item, dict):
+                        continue
+                    agent_code = str(item.get("code") or f"worker-{index}").strip()
+                    specs.append((agent_code, "worker", item))
+            else:
+                specs = [
+                    ("coordinator-1", "coordinator", None),
+                    ("observer-1", "observer", None),
+                    ("worker-e", "worker", None),
+                    ("worker-f", "worker", None),
+                    ("worker-g", "worker", None),
+                    ("worker-smoke", "worker", None),
+                    ("worker-llm", "worker", None),
+                    ("worker-deepseek", "worker", None),
+                ]
+
+            for agent_code, role, spec in specs:
+                policy: dict[str, object] = {"preference": "default"}
+                provider_id = (spec or {}).get("provider_id")
+                if provider_id:
+                    provider = await conn.fetchrow(
+                        """
+                        select name, base_url, model, api_key_ciphertext,
+                               price_input_per_1m, price_output_per_1m,
+                               price_cache_hit_per_1m, enabled
+                        from llm_providers where id=$1
+                        """,
+                        provider_id,
+                    )
+                    if provider is not None:
+                        # 把选中的供应商复制进新项目，密钥密文原样带过去
+                        await conn.execute(
+                            """
+                            insert into llm_providers
+                              (id, project_id, agent_code, name, base_url, model,
+                               api_key_ciphertext, price_input_per_1m, price_output_per_1m,
+                               price_cache_hit_per_1m, enabled)
+                            values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+                            """,
+                            uuid.uuid4(),
+                            project_id,
+                            agent_code,
+                            provider["name"],
+                            provider["base_url"],
+                            (spec or {}).get("model") or provider["model"],
+                            provider["api_key_ciphertext"],
+                            provider["price_input_per_1m"],
+                            provider["price_output_per_1m"],
+                            provider["price_cache_hit_per_1m"],
+                            provider["enabled"],
+                        )
+                        policy = {
+                            "provider": provider["name"],
+                            "base_url": provider["base_url"],
+                            "model": (spec or {}).get("model") or provider["model"],
+                        }
                 await conn.execute(
                     """
                     insert into agents
                       (id, project_id, code, role, model_policy, capabilities, budget, status)
-                    values ($1,$2,$3,$4,'{"preference":"default"}','{}'::text[],'{}'::jsonb,'idle')
+                    values ($1,$2,$3,$4,$5::jsonb,'{}'::text[],'{}'::jsonb,'idle')
                     """,
                     uuid.uuid4(),
                     project_id,
                     agent_code,
                     role,
+                    json.dumps(policy),
                 )
             workstreams = [
                 ("stream-core", "Core", ["src/**", "tests/**", "solution.py"]),

@@ -11,7 +11,7 @@ import {
   MenuFoldOutlined, MenuUnfoldOutlined, PlusOutlined, ReloadOutlined, RobotOutlined,
   SafetyCertificateOutlined, TeamOutlined, ThunderboltOutlined, UnorderedListOutlined,
   UploadOutlined, UserOutlined, ProjectOutlined, InboxOutlined, PartitionOutlined,
-  DeploymentUnitOutlined, ClusterOutlined, ExperimentOutlined,
+  DeploymentUnitOutlined, ClusterOutlined, ExperimentOutlined, ReadOutlined,
 } from "@ant-design/icons";
 import type { EChartsOption } from "echarts";
 import { api, getProject, getToken, setProject, setToken } from "./api";
@@ -812,6 +812,7 @@ export default function HumanApp() {
   };
   const NAV: Array<{ key: string; label: string; icon: React.ReactNode; pages: Array<[string, string]> }> = [
     { key: "overview", label: "总览", icon: <DashboardOutlined />, pages: [["overview", "总览"]] },
+    { key: "guide", label: "指南", icon: <ReadOutlined />, pages: [["guide", "使用指引"]] },
     { key: "tasks", label: `任务 ${tasks.length}`, icon: <UnorderedListOutlined />, pages: [["tasks", "任务"]] },
     { key: "agent-hub", label: "Agent", icon: <TeamOutlined />, pages: [
       ["agents", "列表"], ["workload", "分工"], ["models", "模型"], ["agents-admin", "配置"],
@@ -838,7 +839,7 @@ export default function HumanApp() {
     if (key === "tasks") return tasksPage();
     if (key === "agents") return agentsPage();
     if (key === "events") return eventsPage();
-    if (adminPageKeys.includes(key as UiPageKey)) return <AdminPage page={key as UiPageKey} />;
+    if (adminPageKeys.includes(key as UiPageKey)) return <AdminPage page={key as UiPageKey} onNavigate={setPage} />;
     return adminPage(key);
   };
 

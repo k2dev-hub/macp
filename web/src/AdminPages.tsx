@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert, Button, Card, Col, Descriptions, Drawer, Empty, Form, Input, Modal,
-  Row, Select, Space, Table, Tabs, Tag, Typography, message,
+  Row, Select, Space, Steps, Table, Tabs, Tag, Typography, message,
 } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
@@ -14,7 +14,7 @@ const { Text, Title } = Typography;
 
 /* ------------------------------------------------------------------ types */
 
-export type UiPageKey = "projects" | "artifacts" | "chain" | "agents-admin" | "workload" | "models";
+export type UiPageKey = "guide" | "projects" | "artifacts" | "chain" | "agents-admin" | "workload" | "models";
 
 /* ---------------------------------------------------------------- helpers */
 
@@ -59,31 +59,120 @@ function useLoader<T>(load: () => Promise<T>, deps: unknown[] = []) {
   return { data, error, loading, reload: run };
 }
 
+
+/* --------------------------------------------------------------- 0 指南 */
+
+function GuidePage({ onNavigate }: { onNavigate: (page: string) => void }) {
+  const projects = useLoader(() => api.uiProjects());
+  const providers = useLoader(() => api.llmProviders());
+  const tasks = useLoader(() => api.tasks());
+  const chain = useLoader(() => api.uiChain());
+
+  const providerCount = providers.data?.length ?? 0;
+  const projectCount = projects.data?.length ?? 0;
+  const taskCount = tasks.data?.length ?? 0;
+  const anchored = chain.data?.totals.anchored ?? 0;
+
+  const items = [
+    {
+      title: "配置模型供应商",
+      done: providerCount > 0,
+      detail: "在「设置 · LLM 供应商」填入名称、接口地址、模型名与 Key。一个供应商可以被多个项目复用。",
+      action: "去配置", page: "llm",
+    },
+    {
+      title: "创建项目并组建团队",
+      done: projectCount > 1,
+      detail: "新建项目时选择：每个工作 Agent 用哪家供应商的哪个模型；协调者与观察者是固定角色，不需要模型。",
+      action: "去建项目", page: "projects",
+    },
+    {
+      title: "新建任务并派单",
+      done: taskCount > 0,
+      detail: "任务声明可改动的路径、必须通过的门禁；派单后 Agent 认领，在隔离环境里执行。",
+      action: "去派单", page: "tasks",
+    },
+    {
+      title: "查看审计与上链",
+      done: anchored > 0,
+      detail: "每次构建生成溯源记录，指纹钉在 Hyperledger Fabric 上；「审计」里可看事件流、账本与一致性。",
+      action: "看审计", page: "audit",
+    },
+  ];
+
+  return (
+    <div className="page">
+      <Title level={4}>使用指引</Title>
+      <Text type="secondary">按顺序走一遍，四个步骤都打勾，系统就跑通了。</Text>
+      <Card style={{ marginTop: 12 }}>
+        {items.map((item, index) => (
+          <div key={item.title} style={{
+            display: "flex", gap: 16, padding: "14px 0",
+            borderBottom: index === items.length - 1 ? "none" : "1px solid #f0f2f5",
+          }}>
+            <div style={{ paddingTop: 2 }}>
+              {item.done ? <Tag color="green">已完成</Tag> : <Tag>待开始</Tag>}
+            </div>
+            <div style={{ flex: 1 }}>
+              <Text strong>{index + 1}. {item.title}</Text>
+              <div><Text type="secondary" style={{ fontSize: 12 }}>{item.detail}</Text></div>
+            </div>
+            <Button size="small" onClick={() => onNavigate(item.page)}>{item.action}</Button>
+          </div>
+        ))}
+      </Card>
+      <Card title="两条常用路径" style={{ marginTop: 16 }}>
+        <Space direction="vertical" size={6}>
+          <Text>· 想快速看效果：直接「新建任务」，用默认团队跑一单，然后到「审计 · 事件流」看过程。</Text>
+          <Text>· 想接入自己的模型：先配供应商，再新建项目并在向导里为每个 Agent 选模型。</Text>
+        </Space>
+      </Card>
+    </div>
+  );
+}
+
 /* --------------------------------------------------------------- 1 项目 */
 
-function ProjectsPage() {
+function ProjectsPage({ onNavigate }: { onNavigate: (page: string) => void }) {
   const { data, error, loading, reload } = useLoader(() => api.uiProjects());
-  const [creating, setCreating] = useState(false);
+  const providers = useLoader(() => api.llmProviders());
+  const [wizard, setWizard] = useState(false);
+  const [step, setStep] = useState(0);
   const [editing, setEditing] = useState<ProjectRow | null>(null);
   const [form] = Form.useForm();
+  const [team, setTeam] = useState<Array<{ code: string; provider_id?: string; model?: string }>>([
+    { code: "worker-1" },
+    { code: "worker-2" },
+    { code: "worker-3" },
+  ]);
 
-  const openCreate = () => { form.resetFields(); setCreating(true); };
+  const providerOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const list: Array<{ value: string; label: string }> = [];
+    for (const provider of providers.data ?? []) {
+      const key = `${provider.name}|${provider.model}|${provider.base_url}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      list.push({ value: provider.id, label: `${provider.name} · ${provider.model}` });
+    }
+    return list;
+  }, [providers.data]);
 
-  const submitCreate = async () => {
-    const values = await form.validateFields();
-    await api.createProject({ code: values.code, name: values.name });
-    message.success("项目已创建");
-    setCreating(false);
-    window.dispatchEvent(new Event("macp:projects-changed"));
-    await reload();
+  const openWizard = () => {
+    form.resetFields();
+    setStep(0);
+    setTeam([{ code: "worker-1" }, { code: "worker-2" }, { code: "worker-3" }]);
+    setWizard(true);
   };
 
-  const submitEdit = async () => {
+  const submit = async () => {
     const values = await form.validateFields();
-    if (!editing) return;
-    await api.renameProject(editing.code, values.name);
-    message.success("已保存");
-    setEditing(null);
+    const payload = team
+      .filter((member) => member.provider_id)
+      .map((member) => ({ code: member.code, provider_id: member.provider_id as string, model: member.model }));
+    await api.createProject({ code: values.code, name: values.name, team: payload.length ? payload : undefined });
+    message.success("项目已创建，团队已按所选模型组建");
+    setWizard(false);
     window.dispatchEvent(new Event("macp:projects-changed"));
     await reload();
   };
@@ -114,12 +203,26 @@ function ProjectsPage() {
       <Title level={4}>项目管理</Title>
       {error ? <Alert type="error" message={error} showIcon style={{ marginBottom: 12 }} /> : null}
       <Card extra={<Space><Button icon={<ReloadOutlined />} onClick={reload}>刷新</Button>
-        <Button type="primary" onClick={openCreate}>新建项目</Button></Space>}>
+        <Button type="primary" onClick={openWizard}>新建项目</Button></Space>}>
         <Table rowKey="code" size="small" loading={loading} columns={columns} dataSource={data ?? []} pagination={false} />
       </Card>
 
-      <Modal title="新建项目" open={creating} onCancel={() => setCreating(false)} onOk={submitCreate} okText="创建">
-        <Form form={form} layout="vertical">
+      <Modal title="新建项目" width={640} open={wizard} onCancel={() => setWizard(false)}
+        onOk={() => (step < 2 ? setStep(step + 1) : submit())}
+        okText={step < 2 ? "下一步" : "创建"}
+        cancelText={step === 0 ? "取消" : "上一步"}
+        footer={[
+          <Button key="back" onClick={() => (step === 0 ? setWizard(false) : setStep(step - 1))}>
+            {step === 0 ? "取消" : "上一步"}
+          </Button>,
+          <Button key="next" type="primary" onClick={() => (step < 2 ? setStep(step + 1) : submit())}>
+            {step < 2 ? "下一步" : "创建项目"}
+          </Button>,
+        ]}>
+        <Steps size="small" current={step} style={{ marginBottom: 20 }}
+          items={[{ title: "基本信息" }, { title: "组建团队" }, { title: "确认" }]} />
+
+        <Form form={form} layout="vertical" style={{ display: step === 0 ? "block" : "none" }}>
           <Form.Item name="code" label="项目编码" rules={[{ required: true }, { pattern: /^[a-z][a-z0-9-]{1,31}$/, message: "小写字母开头，可含数字与连字符" }]}>
             <Input placeholder="例如 demo-2" />
           </Form.Item>
@@ -127,9 +230,84 @@ function ProjectsPage() {
             <Input placeholder="例如 演示项目" />
           </Form.Item>
         </Form>
+
+        {step === 1 ? (
+          <div>
+            <Alert type="info" showIcon style={{ marginBottom: 12 }}
+              message="协调者与观察者是固定角色，不需要模型；下面为每个工作 Agent 选择模型来源。" />
+            {providerOptions.length === 0 ? (
+              <Alert type="warning" showIcon style={{ marginBottom: 12 }}
+                message="还没有配置 LLM 供应商"
+                action={<Button size="small" onClick={() => { setWizard(false); onNavigate("llm"); }}>去配置</Button>} />
+            ) : null}
+            {team.map((member, index) => (
+              <Row gutter={8} key={index} style={{ marginBottom: 10 }}>
+                <Col span={6}>
+                  <Input value={member.code} onChange={(event) => {
+                    const next = [...team];
+                    next[index] = { ...next[index], code: event.target.value };
+                    setTeam(next);
+                  }} placeholder="worker-1" />
+                </Col>
+                <Col span={10}>
+                  <Select style={{ width: "100%" }} placeholder="选择模型来源" allowClear
+                    value={member.provider_id}
+                    options={providerOptions}
+                    onChange={(value) => {
+                      const next = [...team];
+                      next[index] = { ...next[index], provider_id: value };
+                      setTeam(next);
+                    }} />
+                </Col>
+                <Col span={6}>
+                  <Input placeholder="模型名（可选）" value={member.model}
+                    onChange={(event) => {
+                      const next = [...team];
+                      next[index] = { ...next[index], model: event.target.value };
+                      setTeam(next);
+                    }} />
+                </Col>
+                <Col span={2}>
+                  <Button danger onClick={() => setTeam(team.filter((_, i) => i !== index))}>删</Button>
+                </Col>
+              </Row>
+            ))}
+            <Button onClick={() => setTeam([...team, { code: `worker-${team.length + 1}` }])}>+ 再加一个 Agent</Button>
+          </div>
+        ) : null}
+
+        {step === 2 ? (
+          <Descriptions column={1} size="small" bordered>
+            <Descriptions.Item label="编码">{form.getFieldValue("code")}</Descriptions.Item>
+            <Descriptions.Item label="名称">{form.getFieldValue("name")}</Descriptions.Item>
+            <Descriptions.Item label="团队">
+              <Space direction="vertical" size={2}>
+                <Text>coordinator-1 · 协调者（无模型）</Text>
+                <Text>observer-1 · 观察者（无模型）</Text>
+                {team.map((member) => {
+                  const provider = (providers.data ?? []).find((item) => item.id === member.provider_id);
+                  return (
+                    <Text key={member.code}>
+                      {member.code} · {provider ? `${provider.name} / ${member.model || provider.model}` : "未选模型"}
+                    </Text>
+                  );
+                })}
+              </Space>
+            </Descriptions.Item>
+          </Descriptions>
+        ) : null}
       </Modal>
 
-      <Modal title={`重命名 ${editing?.code ?? ""}`} open={!!editing} onCancel={() => setEditing(null)} onOk={submitEdit} okText="保存">
+      <Modal title={`重命名 ${editing?.code ?? ""}`} open={!!editing} onCancel={() => setEditing(null)}
+        onOk={async () => {
+          const values = await form.validateFields();
+          if (!editing) return;
+          await api.renameProject(editing.code, values.name);
+          message.success("已保存");
+          setEditing(null);
+          window.dispatchEvent(new Event("macp:projects-changed"));
+          await reload();
+        }} okText="保存">
         <Form form={form} layout="vertical">
           <Form.Item name="name" label="名称" rules={[{ required: true }]}>
             <Input />
@@ -535,8 +713,9 @@ function ModelsPage() {
 
 /* -------------------------------------------------------------- dispatch */
 
-export function AdminPage({ page }: { page: UiPageKey }) {
-  if (page === "projects") return <ProjectsPage />;
+export function AdminPage({ page, onNavigate }: { page: UiPageKey; onNavigate?: (page: string) => void }) {
+  if (page === "guide") return <GuidePage onNavigate={onNavigate ?? (() => undefined)} />;
+  if (page === "projects") return <ProjectsPage onNavigate={onNavigate ?? (() => undefined)} />;
   if (page === "artifacts") return <ArtifactsPage />;
   if (page === "chain") return <ChainPage />;
   if (page === "agents-admin") return <AgentsPage />;
@@ -544,5 +723,5 @@ export function AdminPage({ page }: { page: UiPageKey }) {
   return <ModelsPage />;
 }
 
-export const adminPageKeys: UiPageKey[] = ["projects", "artifacts", "chain", "agents-admin", "workload", "models"];
+export const adminPageKeys: UiPageKey[] = ["guide", "projects", "artifacts", "chain", "agents-admin", "workload", "models"];
 
