@@ -814,6 +814,7 @@ export default function HumanApp() {
   const NAV: Array<{ key: string; label: string; icon: React.ReactNode; pages: Array<[string, string]> }> = [
     { key: "overview", label: "总览", icon: <DashboardOutlined />, pages: [["overview", "总览"]] },
     { key: "guide", label: "指南", icon: <ReadOutlined />, pages: [["guide", "使用指引"]] },
+    { key: "projects", label: "项目", icon: <ProjectOutlined />, pages: [["projects", "项目管理"]] },
     { key: "tasks", label: `任务 ${tasks.length}`, icon: <UnorderedListOutlined />, pages: [["tasks", "任务"]] },
     { key: "agent-hub", label: "Agent", icon: <TeamOutlined />, pages: [
       ["agents", "列表"], ["workload", "分工"], ["models", "模型"], ["agents-admin", "配置"],
@@ -826,7 +827,7 @@ export default function HumanApp() {
       ["approvals", "审批"], ["leases", "租约"], ["alerts", "告警"],
     ] },
     { key: "settings", label: "设置", icon: <ApiOutlined />, pages: [
-      ["projects", "项目"], ["llm", "LLM 供应商"], ["api", "API 与版本"],
+      ["llm", "LLM 供应商"], ["api", "API 与版本"],
     ] },
   ];
   const activeGroup = NAV.find((group) => group.pages.some(([key]) => key === page)) ?? NAV[0];
