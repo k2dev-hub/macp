@@ -206,7 +206,7 @@ _PAGE = """<!doctype html>
   <section>
     <h2>进行中任务</h2>
     <div id="tasks"></div>
-    <h2>联盟链</h2>
+    <h2>Hyperledger Fabric</h2>
     <div id="chain"></div>
   </section>
 </main>

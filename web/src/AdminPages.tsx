@@ -220,11 +220,11 @@ function ChainPage() {
   const fabric = data?.fabric;
   return (
     <div className="page">
-      <Title level={4}>上链情况</Title>
+      <Title level={4}>上链（Hyperledger Fabric）</Title>
       {error ? <Alert type="error" message={error} showIcon style={{ marginBottom: 12 }} /> : null}
       {fabric && !fabric.enabled ? (
         <Alert type="warning" showIcon style={{ marginBottom: 12 }}
-          message="联盟链未启用" description="config/macp.toml 的 [fabric] enabled 为 false，或桥接不可达。" />
+          message="Fabric 未启用" description="config/macp.toml 的 [fabric] enabled 为 false，或桥接不可达。" />
       ) : null}
       {fabric?.error ? <Alert type="error" showIcon style={{ marginBottom: 12 }} message={fabric.error} /> : null}
 
@@ -240,7 +240,7 @@ function ChainPage() {
           </Card>
         </Col>
         <Col xs={24} md={12}>
-          <Card title="联盟链" extra={<Space>
+          <Card title="Hyperledger Fabric" extra={<Space>
             <Button size="small" onClick={() => window.open("/chain", "_blank")}>账本页</Button>
             <Button size="small" onClick={() => window.open("/audit", "_blank")}>审计看板</Button>
           </Space>}>
@@ -491,7 +491,7 @@ function ModelsPage() {
   return (
     <div className="page">
       <Title level={4}>模型指派</Title>
-      <Text type="secondary">为每个 Agent 指定模型来源；供应商本身在「LLM 配置」页维护。</Text>
+      <Text type="secondary">为 Agent 指定模型来源；供应商在「设置 · LLM 供应商」维护。</Text>
       {error ? <Alert type="error" message={error} showIcon style={{ marginBottom: 12, marginTop: 12 }} /> : null}
       <Card style={{ marginTop: 12 }} extra={<Button icon={<ReloadOutlined />} onClick={reload}>刷新</Button>}>
         <Table rowKey="code" size="small" loading={loading} columns={columns} dataSource={agents} pagination={false} />

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert, Avatar, Badge, Button, Card, Col, Descriptions, Divider, Drawer, Empty,
-  Form, Input, Layout, List, Menu, Modal, Popconfirm, Row, Select, Space, Table,
+  Form, Input, Layout, List, Menu, Modal, Popconfirm, Row, Select, Space, Table, Tabs,
   Tag, Timeline, Typography, Upload, message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -578,7 +578,7 @@ export default function HumanApp() {
         <div className="hero-copy">
           <Text className="eyebrow">MULTI-AGENT COORDINATION</Text>
           <Title level={2}>今天的协作状态</Title>
-          <Paragraph>任务从 Work Order 出发，经过派单、隔离执行、门禁、回执、验收与合并。所有写操作都留下证据和审计链。</Paragraph>
+          <Paragraph>任务从工单派发，经隔离执行、门禁、回执到合并，每步留存证据。</Paragraph>
           <Space wrap>
             {token ? (
               <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>新建任务</Button>
@@ -803,13 +803,47 @@ export default function HumanApp() {
     workload: ["分工看板", "每个 Agent 在做什么、负载与在办任务"],
     models: ["模型指派", "为 Agent 选择模型来源与模型名"],
   };
+  const NAV: Array<{ key: string; label: string; icon: React.ReactNode; pages: Array<[string, string]> }> = [
+    { key: "overview", label: "总览", icon: <DashboardOutlined />, pages: [["overview", "总览"]] },
+    { key: "tasks", label: `任务 ${tasks.length}`, icon: <UnorderedListOutlined />, pages: [["tasks", "任务"]] },
+    { key: "agent-hub", label: "Agent", icon: <TeamOutlined />, pages: [
+      ["agents", "列表"], ["workload", "分工"], ["models", "模型"], ["agents-admin", "配置"],
+    ] },
+    { key: "artifacts", label: "产物", icon: <InboxOutlined />, pages: [["artifacts", "产物与证据"]] },
+    { key: "audit", label: "审计", icon: <ClusterOutlined />, pages: [
+      ["events", "事件流"], ["chain", "上链"],
+    ] },
+    { key: "ops", label: "运营", icon: <SafetyCertificateOutlined />, pages: [
+      ["approvals", "审批"], ["leases", "租约"], ["alerts", "告警"],
+    ] },
+    { key: "settings", label: "设置", icon: <ApiOutlined />, pages: [
+      ["projects", "项目"], ["llm", "LLM 供应商"], ["api", "API 与版本"],
+    ] },
+  ];
+  const activeGroup = NAV.find((group) => group.pages.some(([key]) => key === page)) ?? NAV[0];
+  const NAV_GROUP = (key: string) => {
+    const group = NAV.find((item) => item.key === key);
+    return group ? group.pages[0][0] : "overview";
+  };
+
+  const renderPage = (key: string) => {
+    if (key === "overview") return overviewPage();
+    if (key === "tasks") return tasksPage();
+    if (key === "agents") return agentsPage();
+    if (key === "events") return eventsPage();
+    if (adminPageKeys.includes(key as UiPageKey)) return <AdminPage page={key as UiPageKey} />;
+    return adminPage(key);
+  };
+
   const content = () => {
-    if (page === "overview") return overviewPage();
-    if (page === "tasks") return tasksPage();
-    if (page === "agents") return agentsPage();
-    if (page === "events") return eventsPage();
-    if (adminPageKeys.includes(page as UiPageKey)) return <AdminPage page={page as UiPageKey} />;
-    return adminPage(page);
+    if (activeGroup.pages.length === 1) return renderPage(activeGroup.pages[0][0]);
+    return (
+      <Tabs
+        activeKey={page}
+        onChange={setPage}
+        items={activeGroup.pages.map(([key, label]) => ({ key, label, children: renderPage(key) }))}
+      />
+    );
   };
 
   return (
@@ -822,27 +856,12 @@ export default function HumanApp() {
             options={[{ value: "demo", label: "demo" }, ...projects.filter((p) => p.code !== "demo").map((p) => ({ value: p.code, label: `${p.code} · ${p.name}` }))]}
             onChange={(value) => { setProject(value); setProjectState(value); window.location.reload(); }} />
         </div>
-        <Menu mode="inline" selectedKeys={[page]} onClick={({ key }) => setPage(key)} className="nav" items={[
-          { key: "overview", icon: <DashboardOutlined />, label: "总览" },
-          { key: "tasks", icon: <UnorderedListOutlined />, label: `任务 ${tasks.length}` },
-          { key: "agents", icon: <TeamOutlined />, label: `Agent ${agents.length}` },
-          { key: "events", icon: <ThunderboltOutlined />, label: "协作事件" },
-          { key: "approvals", icon: <SafetyCertificateOutlined />, label: approvals.length ? `审批 ${approvals.length}` : "审批" },
-          { key: "leases", icon: <KeyOutlined />, label: leases.length ? `租约 ${leases.length}` : "租约" },
-          { key: "alerts", icon: <AlertOutlined />, label: alerts.length ? `告警 ${alerts.length}` : "告警" },
-          { key: "llm", icon: <CloudServerOutlined />, label: "LLM 配置" },
-          { key: "api", icon: <ApiOutlined />, label: "API 与版本" },
-          { type: "divider" as const },
-          { key: "projects", icon: <ProjectOutlined />, label: "项目管理" },
-          { key: "artifacts", icon: <InboxOutlined />, label: "产物与证据" },
-          { key: "chain", icon: <ClusterOutlined />, label: "上链情况" },
-          { key: "agents-admin", icon: <DeploymentUnitOutlined />, label: "Agent 管理" },
-          { key: "workload", icon: <PartitionOutlined />, label: "分工看板" },
-          { key: "models", icon: <ExperimentOutlined />, label: "模型指派" },
-        ].filter((item) => {
-          if (item.type === "divider") return Boolean(token);
-          return token || !ADMIN_PAGES.has(String(item.key));
-        })} />
+        <Menu mode="inline" selectedKeys={[activeGroup.key]} onClick={({ key }) => setPage(NAV_GROUP(key))} className="nav" items={NAV.map((group) => ({
+          key: group.key,
+          icon: group.icon,
+          label: group.label,
+        }))} />
+
         <div className="sider-foot">
           <div><Badge status={connected ? "processing" : "error"} text={connected ? "实时连接" : "连接中断"} /><div><Text type="secondary">{token ? "管理员模式" : "只读访客"}</Text></div></div>
           <Text type="secondary">v0.2.0</Text>

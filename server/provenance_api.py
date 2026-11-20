@@ -303,12 +303,12 @@ _PAGE = """<!doctype html>
    <tr><td class="k">产物指纹</td><td><code>{sha256}</code></td></tr>
    <tr><td class="k">依赖清单</td><td>{deps} 项</td></tr>
    <tr><td class="k">上链时间</td><td>{chained_at}</td></tr>
-   <tr><td class="k">联盟链交易</td><td><code>{fabric_tx}</code></td></tr>
+   <tr><td class="k">Fabric 交易</td><td><code>{fabric_tx}</code></td></tr>
    <tr><td class="k">验证结果</td><td class="{verdict_class}">{verdict}</td></tr>
   </table>
   <ul class="checks">{check_items}</ul>
  </div>
- <div class="foot">记录以哈希链存证；任何字段或产物被改动，验证都会失败。</div>
+ <div class="foot">哈希链存证：字段或产物被改动，验证即失败。</div>
 </div></body></html>"""
 
 
@@ -386,7 +386,7 @@ async def verify_qr(request: Request, build_id: str):
 _CHAIN_PAGE = """<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>联盟链账本 · MACP</title>
+<title>Fabric 账本 · MACP</title>
 <style>
  :root {{ color-scheme: light dark; }}
  body {{ font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
@@ -416,8 +416,8 @@ _CHAIN_PAGE = """<!doctype html>
 </style></head>
 <body><div class="card">
  <div class="head">
-  <h1>联盟链账本</h1>
-  <p>通道 {channel} · 链码 {chaincode} · 区块高度 {height}</p>
+  <h1>Fabric 账本</h1>
+  <p>Hyperledger Fabric · 通道 {channel} · 链码 {chaincode} · 区块高度 {height}</p>
  </div>
  <div class="stats">
   <div class="stat"><b>{on_chain}</b><span>链上锚定</span></div>
@@ -443,7 +443,7 @@ async def ledger_page(request: Request, limit: int = Query(default=50, ge=1, le=
     chain = view["chain"]
 
     if not chain["enabled"]:
-        table = '<div class="empty">未配置联盟链（[fabric] enabled = false），此处仅显示本地统计。</div>'
+        table = '<div class="empty">未配置 Fabric（[fabric] enabled = false），此处仅显示本地统计。</div>'
     elif chain.get("error"):
         table = f'<div class="empty">链不可达：{html.escape(str(chain["error"]))[:200]}</div>'
     elif not view["comparison"]:
