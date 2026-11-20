@@ -171,7 +171,7 @@ async def main() -> None:
     log.info("coordinator started")
     while True:
         heartbeat()
-        report_alive(COORDINATOR)
+        report_alive("coordinator-1")
         status, projects = await asyncio.to_thread(request, "GET", "/v1/projects")
         if status == 200:
             for project in projects:

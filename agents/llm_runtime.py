@@ -15,7 +15,7 @@ from pathlib import Path
 import urllib.error
 import urllib.request
 
-from .common import BASE, heartbeat, request
+from .common import BASE, heartbeat, report_alive, request
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("macp.llm")
@@ -306,7 +306,9 @@ async def run_task(task: str, token: str, assignment_id: str) -> None:
 
 async def main() -> None:
     log.info("llm runtime started: base=%s model=%s", LLM_BASE, LLM_MODEL)
+    report_alive(WORKER, force=True)
     while True:
+        report_alive(WORKER)
         heartbeat()
         await refresh_config()
         status, assignment = await asyncio.to_thread(
