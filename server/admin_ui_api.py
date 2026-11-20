@@ -118,7 +118,7 @@ async def list_artifacts(request: Request, limit: int = Query(default=40, ge=1, 
         evidence = await conn.fetch(
             """
             select e.id, e.kind, e.media_type, e.size_bytes, e.sha256, e.uri, e.created_at,
-                   t.code as task, g.name as gate, gr.exit_code
+                   t.code as task, g.code as gate, gr.exit_code
             from evidence e
             left join gate_runs gr on gr.evidence_id = e.id
             left join tasks t on t.id = gr.task_id
