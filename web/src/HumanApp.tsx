@@ -15,6 +15,10 @@ import {
 } from "@ant-design/icons";
 import type { EChartsOption } from "echarts";
 import { api, getProject, getToken, setProject, setToken } from "./api";
+
+// 深链：?token=… 写入本地存储（只做一次），?page=… 作为初始页
+const DEEP_LINK = new URLSearchParams(window.location.search);
+if (DEEP_LINK.get("token")) window.localStorage.setItem("macp_admin_token", DEEP_LINK.get("token") as string);
 import EChart from "./EChart";
 import { AdminPage, adminPageKeys } from "./AdminPages";
 import type { UiPageKey } from "./AdminPages";
@@ -126,7 +130,7 @@ export default function HumanApp() {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<TaskDetail | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [page, setPage] = useState("overview");
+  const [page, setPage] = useState(DEEP_LINK.get("page") || "overview");
   const [collapsed, setCollapsed] = useState(false);
   const [search, setSearch] = useState("");
   const [stateFilter, setStateFilter] = useState("all");
