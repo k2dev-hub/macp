@@ -327,5 +327,25 @@ def required_gates(
     return gates
 
 
+def gate_exit(gate: dict) -> int | None:
+    """Exit code of a receipt gate entry, tolerating the shapes agents emit.
+
+    Agents write ``exit``, ``exit_code``, or a status string.  Reading only
+    ``exit`` made a receipt written as {"gate": "compile", "status": "passed"}
+    look like a failing gate, and the agent retried until it blocked the task.
+    """
+
+    value = gate.get("exit", gate.get("exit_code"))
+    if value is None:
+        status = str(gate.get("status") or "").strip().lower()
+        if status in ("pass", "passed", "ok", "success", "succeeded"):
+            return 0
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def body_hash(wo: dict[str, Any]) -> str:
     return "sha256:" + hashlib.sha256(canonical_json(wo)).hexdigest()

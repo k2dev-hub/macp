@@ -31,6 +31,7 @@ from .db import current_project, emit_event
 from . import artifact_stamp, fabric
 from .provenance import record_build
 from .workorders import (
+    gate_exit,
     DEFAULT_WRITE_SURFACE,
     LEVEL_NAMES,
     effective_level,
@@ -1382,7 +1383,11 @@ async def execute(name: str, task: str, agent: str, attempt: int, args: dict, re
             level = effective_level(work_order or {}, changed_paths, changed_lines)
             required = required_gates(work_order or {}, changed_paths, changed_lines)
             present = {gate.get("gate"): gate for gate in gates}
-            missing = [gate for gate in required if gate not in present or present[gate].get("exit") != 0]
+            missing = [
+                gate
+                for gate in required
+                if gate not in present or gate_exit(present[gate]) != 0
+            ]
             if missing:
                 raise ValueError(
                     "missing required acceptance gates: "

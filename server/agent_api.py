@@ -32,6 +32,7 @@ from .db import (
 )
 from . import signing
 from .workorders import (
+    gate_exit,
     LEVEL_NAMES,
     SEED_APP_DIGEST,
     body_hash as workorder_hash,
@@ -41,22 +42,6 @@ from .workorders import (
     required_gates,
     surface_level,
 )
-
-
-def gate_exit(gate: dict):
-    """Exit code for a receipt gate entry.
-
-    Agents write this three ways: ``exit``, ``exit_code``, or a status string.
-    Treating a missing ``exit`` as failure sent every receipt written as
-    {"gate": "compile", "status": "passed"} into a retry loop.
-    """
-
-    value = gate.get("exit", gate.get("exit_code"))
-    if value is None:
-        status = str(gate.get("status") or "").strip().lower()
-        if status in ("pass", "passed", "ok", "success", "succeeded"):
-            return 0
-    return value
 
 
 router = APIRouter(prefix="/v1", tags=["agent"], dependencies=[Depends(require_write_token)])
