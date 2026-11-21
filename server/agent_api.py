@@ -43,6 +43,22 @@ from .workorders import (
 )
 
 
+def gate_exit(gate: dict):
+    """Exit code for a receipt gate entry.
+
+    Agents write this three ways: ``exit``, ``exit_code``, or a status string.
+    Treating a missing ``exit`` as failure sent every receipt written as
+    {"gate": "compile", "status": "passed"} into a retry loop.
+    """
+
+    value = gate.get("exit", gate.get("exit_code"))
+    if value is None:
+        status = str(gate.get("status") or "").strip().lower()
+        if status in ("pass", "passed", "ok", "success", "succeeded"):
+            return 0
+    return value
+
+
 router = APIRouter(prefix="/v1", tags=["agent"], dependencies=[Depends(require_write_token)])
 
 
@@ -1073,19 +1089,30 @@ async def submit_receipt(
             )
             level = effective_level(work_order, changed_paths, changed_lines)
             required = required_gates(work_order, changed_paths, changed_lines)
-            missing = [
-                gate
-                for gate in required
-                if gate not in present or int(present[gate].get("exit", 1)) != 0
-            ]
+            missing = []
+            errors = []
+            for gate in required:
+                if gate not in present:
+                    missing.append(gate)
+                    errors.append(f"missing gate: {gate}")
+                    continue
+                code_value = gate_exit(present[gate])
+                if code_value is None:
+                    missing.append(gate)
+                    errors.append(
+                        f"gate {gate} has no exit code "
+                        f"(got status={present[gate].get('status')!r})"
+                    )
+                    continue
+                try:
+                    if int(code_value) != 0:
+                        missing.append(gate)
+                        errors.append(f"gate {gate} exited {code_value}")
+                except (TypeError, ValueError):
+                    missing.append(gate)
+                    errors.append(f"gate {gate} has a non-numeric exit {code_value!r}")
             if missing:
-                raise HTTPException(
-                    422,
-                    {
-                        "code": "missing_gates",
-                        "errors": [f"missing or failing gate: {gate}" for gate in missing],
-                    },
-                )
+                raise HTTPException(422, {"code": "missing_gates", "errors": errors})
             for gate in gates:
                 evidence_id = gate.get("evidence_id")
                 if not evidence_id:
@@ -1287,7 +1314,7 @@ async def review(
                 failing = [
                     gate
                     for gate in required
-                    if gate not in present or int(present[gate].get("exit", 1)) != 0
+                    if gate not in present or gate_exit(present[gate]) != 0
                 ]
                 if failing:
                     raise HTTPException(
