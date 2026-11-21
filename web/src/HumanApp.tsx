@@ -57,6 +57,29 @@ const KEY_EVENTS = new Set([
   "merge.reverted", "merge.requeued", "approval.requested", "approval.approved",
   "approval.denied", "alert.opened", "alert.cleared", "budget.exhausted",
 ]);
+// 新建任务用的人类可读选项：内部代号不变，界面给中文与一句解释
+const WORKSTREAM_OPTIONS = [
+  { value: "stream-core", label: "核心代码", desc: "后端与库代码，默认写面 src/**、tests/**" },
+  { value: "stream-ui", label: "界面", desc: "前端与样式，默认写面 web/**" },
+  { value: "stream-infra", label: "基础设施", desc: "部署、脚本与流水线，默认写面 deploy/**" },
+];
+
+const KIND_OPTIONS = [
+  { value: "slice", label: "新功能", desc: "新增一块能力，通常要求单元测试" },
+  { value: "fix", label: "缺陷修复", desc: "修正已有问题，改动范围尽量小" },
+  { value: "infra", label: "基础设施", desc: "部署、配置与运维脚本" },
+  { value: "migration", label: "数据迁移", desc: "表结构或数据搬迁，属高风险变更" },
+  { value: "spike", label: "技术调研", desc: "只产出结论与方案，不要求提交代码" },
+  { value: "docs", label: "文档", desc: "只改文档与说明" },
+];
+
+const PRIORITY_OPTIONS = [
+  { value: "P0", label: "P0 紧急", desc: "阻塞他人，需要立刻处理" },
+  { value: "P1", label: "P1 高", desc: "本迭代必须完成" },
+  { value: "P2", label: "P2 普通", desc: "默认，按顺序排队" },
+  { value: "P3", label: "P3 低", desc: "有空再做" },
+];
+
 const ADMIN_PAGES = new Set([
   "approvals", "leases", "alerts", "llm",
   "projects", "artifacts", "chain", "agents-admin", "workload", "models",
@@ -174,6 +197,22 @@ export default function HumanApp() {
   const [mergeIds, setMergeIds] = useState<Record<string, string>>({});
   const [rejectFindings, setRejectFindings] = useState("");
   const [taskForm] = Form.useForm();
+
+  const workstreamValue = Form.useWatch("workstream", taskForm);
+  const kindValue = Form.useWatch("kind", taskForm);
+  const priorityValue = Form.useWatch("priority", taskForm);
+  const pick = (list: Array<{ value: string; label: string; desc: string }>, value?: string) =>
+    list.find((item) => item.value === value) ?? list[0];
+  const workstreamPick = pick(WORKSTREAM_OPTIONS, workstreamValue);
+  const kindPick = pick(KIND_OPTIONS, kindValue);
+  const priorityPick = pick(PRIORITY_OPTIONS, priorityValue);
+  const workstreamLabel = workstreamPick.label;
+  const kindLabel = kindPick.label;
+  const priorityLabel = priorityPick.label;
+  const workstreamHint = workstreamPick.desc;
+  const kindHint = kindPick.desc;
+  const priorityHint = priorityPick.desc;
+
   const [tokenForm] = Form.useForm();
   const [llmForm] = Form.useForm();
   const refreshTimer = useRef<number | null>(null);
@@ -303,6 +342,12 @@ export default function HumanApp() {
   const openTask = async (code: string) => {
     try { setSelected(await api.task(code)); setRejectFindings(""); setDrawerOpen(true); }
     catch (err) { message.error(err instanceof Error ? err.message : String(err)); }
+  };
+
+  const openCreate = () => {
+    // 编号自动生成，避免手填格式错误（必须是 T- 加纯数字）
+    taskForm.setFieldsValue({ code: `T-${Math.floor(100000 + Math.random() * 900000)}` });
+    setCreateOpen(true);
   };
 
   const createTask = async () => {
@@ -605,7 +650,7 @@ export default function HumanApp() {
           <Paragraph>任务从工单派发，经隔离执行、门禁、回执到合并，每步留存证据。</Paragraph>
           <Space wrap>
             {token ? (
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>新建任务</Button>
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => openCreate()}>新建任务</Button>
             ) : (
               <Button type="primary" icon={<LoginOutlined />} onClick={() => void loginWithSso()}>登录后新建</Button>
             )}
@@ -691,7 +736,7 @@ export default function HumanApp() {
   );
 
   const tasksPage = () => (
-    <Card title="任务列表" className="table-card" extra={token ? <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>新建任务</Button> : undefined}>
+    <Card title="任务列表" className="table-card" extra={token ? <Button type="primary" icon={<PlusOutlined />} onClick={() => openCreate()}>新建任务</Button> : undefined}>
       <Space wrap className="toolbar">
         <Input.Search allowClear placeholder="搜索编号、标题、Agent" value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: 280 }} />
         <Select value={stateFilter} onChange={setStateFilter} style={{ width: 150 }} options={[{ value: "all", label: "全部状态" }, ...STATE_ORDER.map((s) => ({ value: s, label: LABELS[s] }))]} />
@@ -924,7 +969,7 @@ export default function HumanApp() {
                 <Button icon={<LockOutlined />} onClick={() => setTokenOpen(true)}>配置 Token</Button>
               </>
             )}
-            {token && <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>新建任务</Button>}
+            {token && <Button type="primary" icon={<PlusOutlined />} onClick={() => openCreate()}>新建任务</Button>}
             <Button icon={<ReloadOutlined />} onClick={() => void load()} />
           </Space>
         </Header>
@@ -1011,12 +1056,35 @@ export default function HumanApp() {
             <Col span={16}><Form.Item name="title" label="标题" rules={[{ required: true }]}><Input placeholder="一句话说明要做什么" /></Form.Item></Col>
           </Row>
           <Row gutter={12}>
-            <Col span={8}><Form.Item name="workstream" label="工作流"><Select options={[{ value: "stream-core", label: "Core" }, { value: "stream-ui", label: "UI" }, { value: "stream-infra", label: "Infra" }]} /></Form.Item></Col>
-            <Col span={8}><Form.Item name="priority" label="优先级"><Select options={["P0", "P1", "P2", "P3"].map((v) => ({ value: v, label: v }))} /></Form.Item></Col>
-            <Col span={8}><Form.Item name="kind" label="类型"><Select options={["slice", "fix", "infra", "migration"].map((v) => ({ value: v, label: v }))} /></Form.Item></Col>
+            <Col span={8}>
+              <Form.Item name="workstream" label="工作流" extra={<Text type="secondary" style={{ fontSize: 12 }}>{workstreamHint}</Text>}>
+                <Select options={WORKSTREAM_OPTIONS.map(({ value, label }) => ({ value, label }))} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="priority" label="优先级" extra={<Text type="secondary" style={{ fontSize: 12 }}>{priorityHint}</Text>}>
+                <Select options={PRIORITY_OPTIONS.map(({ value, label }) => ({ value, label }))} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="kind" label="类型" extra={<Text type="secondary" style={{ fontSize: 12 }}>{kindHint}</Text>}>
+                <Select options={KIND_OPTIONS.map(({ value, label }) => ({ value, label }))} />
+              </Form.Item>
+            </Col>
           </Row>
           <Form.Item name="max_cost" label="成本上限（CNY）"><Input type="number" min={0} step={0.1} /></Form.Item>
-          <Text type="secondary">默认写面：solution.py / src/** / tests/** / README.md；锚点按 main 解析。</Text>
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginTop: 4 }}
+            message={`这条任务会进入「${workstreamLabel}」，类型「${kindLabel}」，优先级 ${priorityLabel}`}
+            description={
+              <span style={{ fontSize: 12 }}>
+                写面与门禁由平台按工作流和改动路径自动推导：涉及 <Text code>src/**</Text> 需通过单测，
+                涉及 <Text code>deploy/</Text>、<Text code>*.sql</Text> 等高风险路径会升到 L3 并要求安全扫描。
+              </span>
+            }
+          />
         </Form>
       </Modal>
 
