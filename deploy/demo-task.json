@@ -1,0 +1,33 @@
+{
+  "code": "T-9003",
+  "title": "为示例应用实现 multiply：单测 + 集成测试 + 构建产物 + 上链存证",
+  "workstream": "stream-core",
+  "kind": "slice",
+  "priority": "P1",
+  "work_order": {
+    "objective": "在示例仓库中实现 multiply(a,b)，补齐单元测试、集成测试与 Makefile，使 compile/unit/integration/build 四个门禁全部通过。",
+    "write_surface": ["src/**", "tests/**", "Makefile", "notes/**"],
+    "constraints": [
+      "只允许改动 write_surface 内的路径",
+      "src/app.py 保留现有 add(a,b) 不动",
+      "Makefile 的默认目标必须产出 dist/hello.txt",
+      "tests/integration/ 下至少一个集成测试"
+    ],
+    "acceptance": [
+      {"gate": "compile", "level": "L1", "required": true},
+      {"gate": "unit", "level": "L1", "required": true},
+      {"gate": "integration", "level": "L1", "required": true},
+      {"gate": "build", "level": "L1", "required": true}
+    ],
+    "execution": {
+      "profile": "kvm-debian",
+      "platforms": ["sandbox", "linux"],
+      "collect": ["dist/**"]
+    },
+    "completion_contract": {
+      "observable": "新增 src/app.py:multiply、tests/test_app.py、tests/integration/test_workflow.py、Makefile，dist/hello.txt 可复现",
+      "entrypoints": ["src/app.py:multiply"],
+      "consumers": ["tests/test_app.py", "tests/integration/test_workflow.py"]
+    }
+  }
+}
