@@ -1023,7 +1023,7 @@ async def execute(name: str, task: str, agent: str, attempt: int, args: dict, re
             ]
             if gate == "compile":
                 result = run_command(
-                    [sys.executable, "-m", "compileall", "-q", "."],
+                    ["python3", "-m", "compileall", "-q", "."],
                     base,
                     30,
                     profile=execution_profile,
@@ -1031,7 +1031,7 @@ async def execute(name: str, task: str, agent: str, attempt: int, args: dict, re
                 )
             elif gate == "unit":
                 result = run_command(
-                    [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"],
+                    ["python3", "-m", "unittest", "discover", "-s", "tests", "-v"],
                     base,
                     30,
                     profile=execution_profile,
@@ -1039,15 +1039,7 @@ async def execute(name: str, task: str, agent: str, attempt: int, args: dict, re
                 )
             elif gate == "integration":
                 result = run_command(
-                    [
-                        sys.executable,
-                        "-m",
-                        "unittest",
-                        "discover",
-                        "-s",
-                        "tests/integration",
-                        "-v",
-                    ],
+                    ["python3", "-m", "unittest", "discover", "-s", "tests/integration", "-v"],
                     base,
                     60,
                     profile=execution_profile,
