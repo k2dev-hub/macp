@@ -138,6 +138,11 @@ export default function HumanApp() {
   const [selectedTaskCodes, setSelectedTaskCodes] = useState<string[]>([]);
   // 会话过期：直接退出登录，回到未登录状态并提示重新输入 Token，
   // 而不是留在"已登录"界面里让每个接口都报不可用。
+  const [token, setTokenState] = useState(getToken());
+  const [authMethod, setAuthMethodState] = useState(window.localStorage.getItem("macp_auth_method") || (getToken() ? "token" : ""));
+  const [tokenOpen, setTokenOpen] = useState(false);
+  // 会话过期：直接退出登录，回到未登录状态并提示重新输入 Token，
+  // 而不是留在「已登录」界面里让每个接口都报不可用。
   const expiredNotice = useRef(false);
   useEffect(() => {
     setUnauthorizedHandler(() => {
@@ -151,9 +156,6 @@ export default function HumanApp() {
     return () => setUnauthorizedHandler(null);
   }, []);
 
-  const [token, setTokenState] = useState(getToken());
-  const [authMethod, setAuthMethodState] = useState(window.localStorage.getItem("macp_auth_method") || (getToken() ? "token" : ""));
-  const [tokenOpen, setTokenOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [project, setProjectState] = useState(getProject());
