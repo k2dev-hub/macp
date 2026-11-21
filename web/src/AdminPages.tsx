@@ -8,6 +8,7 @@ import type { ColumnsType } from "antd/es/table";
 import { api, setProject } from "./api";
 import type {
   AgentRow, ChainPayload, EvidenceRow, BuildRow, ProjectRow, WorkloadPayload,
+  ProvenanceRecord, ProvenanceVerification,
 } from "./api";
 
 const { Text, Title } = Typography;
@@ -397,6 +398,32 @@ function ArtifactsPage() {
 
 function ChainPage() {
   const { data, error, loading, reload } = useLoader(() => api.uiChain());
+  const [detailFor, setDetailFor] = useState<string | null>(null);
+  const [detail, setDetail] = useState<{
+    record: ProvenanceRecord;
+    verification: ProvenanceVerification;
+    anchor: { found: boolean; record?: Record<string, unknown>; fingerprint_matches?: boolean };
+  } | null>(null);
+  const [detailError, setDetailError] = useState("");
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  const openDetail = async (buildId: string) => {
+    setDetailFor(buildId);
+    setDetail(null);
+    setDetailError("");
+    setDetailLoading(true);
+    try {
+      const [main, anchor] = await Promise.all([
+        api.provenance(buildId),
+        api.chainAnchor(buildId).catch(() => ({ found: false })),
+      ]);
+      setDetail({ record: main.record, verification: main.verification, anchor });
+    } catch (issue) {
+      setDetailError((issue as Error).message);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
 
   const columns: ColumnsType<ChainPayload["builds"][number]> = [
     { title: "构建编号", dataIndex: "build_id", width: 190, render: (v: string) => <Text code>{v}</Text> },
@@ -407,6 +434,13 @@ function ChainPage() {
     { title: "交易", dataIndex: "tx_id", width: 160, render: (v: string | null) => (v ? <Text code>{v.slice(0, 12)}</Text> : "-") },
     { title: "区块", dataIndex: "block", width: 80, align: "right", render: (v: number | null) => v ?? "-" },
     { title: "上链时间", dataIndex: "anchored_at", width: 170, render: when },
+    {
+      title: "详情",
+      width: 90,
+      render: (_, row) => (
+        <Button size="small" onClick={() => void openDetail(row.build_id)}>查看</Button>
+      ),
+    },
   ];
 
   const fabric = data?.fabric;
@@ -447,10 +481,96 @@ function ChainPage() {
         </Col>
       </Row>
 
-      <Card title="最近构建" style={{ marginBottom: 16 }}>
+      <Card title="最近构建" style={{ marginBottom: 16 }} extra={<Text type="secondary">点「查看」看完整记录与链上读回</Text>}>
         <Table rowKey="build_id" size="small" loading={loading}
-          dataSource={data?.builds ?? []} columns={columns} pagination={false} />
+          dataSource={data?.builds ?? []} columns={columns} pagination={false}
+          onRow={(row) => ({ onClick: () => void openDetail(row.build_id), style: { cursor: "pointer" } })} />
       </Card>
+
+      <Drawer
+        width={720}
+        open={detailFor !== null}
+        onClose={() => setDetailFor(null)}
+        title={`构建详情 · ${detailFor ?? ""}`}
+        extra={<Space>
+          <Button size="small" onClick={() => detailFor && window.open(`/verify/${detailFor}`, "_blank")}>验证页</Button>
+          <Button size="small" onClick={() => detailFor && void api.downloadStamp(detailFor).catch((e) => message.error(String(e)))}>标签包</Button>
+        </Space>}
+      >
+        {detailLoading ? <Empty description="读取中…" /> : null}
+        {detailError ? <Alert type="error" showIcon message={detailError} style={{ marginBottom: 12 }} /> : null}
+        {detail ? (
+          <Space direction="vertical" size={16} style={{ width: "100%" }}>
+            <Card size="small" title="记录">
+              <Descriptions column={1} size="small" bordered>
+                <Descriptions.Item label="构建编号">{detail.record.build_id}</Descriptions.Item>
+                <Descriptions.Item label="任务">{detail.record.task_code} · 第 {detail.record.attempt} 次尝试</Descriptions.Item>
+                <Descriptions.Item label="门禁 / 画像">
+                  {detail.record.gate} · {detail.record.profile ?? "-"} · {detail.record.platform ?? "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label="产物">
+                  {detail.record.artifact_name ?? "-"}（{detail.record.artifact_size ?? "-"} 字节）
+                  <div><Text code copyable>{detail.record.artifact_sha256 ?? "-"}</Text></div>
+                </Descriptions.Item>
+                <Descriptions.Item label="源码">{detail.record.source_commit ?? "-"}</Descriptions.Item>
+                <Descriptions.Item label="构建命令">
+                  <Text code>{(detail.record.build_command ?? []).join(" ") || "-"}</Text>
+                </Descriptions.Item>
+                <Descriptions.Item label="执行环境">
+                  {String((detail.record.build_env ?? {}).runner_os ?? "-")} · {(detail.record.build_env ?? {}).vm ? String((detail.record.build_env ?? {}).vm) : "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label="构建人">{detail.record.builder ?? "-"}</Descriptions.Item>
+                <Descriptions.Item label="构建时间">{when(detail.record.created_at)}</Descriptions.Item>
+                <Descriptions.Item label="记录指纹">
+                  <Text code copyable>{detail.record.fingerprint}</Text>
+                </Descriptions.Item>
+                <Descriptions.Item label="记录签名">
+                  <Text code>{(detail.record.signature ?? "-").slice(0, 48)}…</Text>
+                </Descriptions.Item>
+              </Descriptions>
+            </Card>
+
+            <Card size="small" title="三项校验">
+              {(detail.verification.checks ?? []).map((item) => (
+                <div key={item.check} style={{ marginBottom: 6 }}>
+                  <Tag color={item.ok ? "green" : "red"}>{item.ok ? "通过" : "失败"}</Tag>
+                  <Text strong>{item.check}</Text>
+                  <Text type="secondary" style={{ marginLeft: 8 }}>{item.detail ?? ""}</Text>
+                </div>
+              ))}
+              <div style={{ marginTop: 8 }}>
+                <Tag color={detail.verification.verified ? "green" : "red"}>
+                  {detail.verification.verified ? "记录完整" : "记录异常"}
+                </Tag>
+                <Text type="secondary">重算指纹 {detail.verification.recomputed_fingerprint?.slice(0, 16) ?? "-"}…</Text>
+              </div>
+            </Card>
+
+            <Card size="small" title="链上读回（Hyperledger Fabric）">
+              <Descriptions column={1} size="small" bordered>
+                <Descriptions.Item label="状态">
+                  {detail.record.fabric_status === "anchored"
+                    ? <Tag color="purple">已上链</Tag>
+                    : <Tag color="red">未上链</Tag>}
+                  {detail.anchor.fingerprint_matches === true
+                    ? <Tag color="green" style={{ marginLeft: 8 }}>链上指纹一致</Tag>
+                    : detail.anchor.found
+                      ? <Tag color="red" style={{ marginLeft: 8 }}>链上指纹不一致</Tag>
+                      : <Tag style={{ marginLeft: 8 }}>链上查不到</Tag>}
+                </Descriptions.Item>
+                <Descriptions.Item label="交易号">
+                  <Text code copyable>{detail.record.fabric_tx_id ?? "-"}</Text>
+                </Descriptions.Item>
+                <Descriptions.Item label="区块高度">{detail.record.fabric_block ?? "-"}</Descriptions.Item>
+                <Descriptions.Item label="上链时间">{when(detail.record.fabric_anchored)}</Descriptions.Item>
+                <Descriptions.Item label="链上指纹">
+                  <Text code>{String((detail.anchor.record ?? {}).fingerprint ?? "-")}</Text>
+                </Descriptions.Item>
+              </Descriptions>
+            </Card>
+          </Space>
+        ) : null}
+      </Drawer>
 
       <Card title="审计锚点（每日链头）">
         <Table rowKey="day" size="small" loading={loading} pagination={false}

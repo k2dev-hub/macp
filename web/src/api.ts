@@ -219,6 +219,12 @@ export const api = {
       return (await response.json()) as { access_token: string };
     }),
 
+  provenance: (buildId: string) =>
+    get<{ record: ProvenanceRecord; verification: ProvenanceVerification }>(
+      `/v1/provenance/${encodeURIComponent(buildId)}`, true),
+  chainAnchor: (buildId: string) =>
+    get<{ found: boolean; record?: Record<string, unknown>; fingerprint_matches?: boolean }>(
+      `/v1/provenance/${encodeURIComponent(buildId)}/chain-anchor`, true),
   // ---- 管理页 ----
   uiProjects: () => get<ProjectRow[]>("/v1/ui/projects", true),
   createProject: (body: {
@@ -270,4 +276,40 @@ export interface ChainPayload {
   builds: Array<{ build_id: string; task: string; artifact: string | null; status: string | null;
     tx_id: string | null; block: number | null; anchored_at: string | null; created_at: string }>;
   audit_anchors: Array<{ day: string; seq: number; hash: string; created_at: string }>;
+}
+
+export interface ProvenanceRecord {
+  build_id: string;
+  task_code: string;
+  attempt: number;
+  gate: string;
+  platform: string | null;
+  profile: string | null;
+  vm: string | null;
+  artifact_name: string | null;
+  artifact_sha256: string | null;
+  artifact_size: number | null;
+  artifact_path: string | null;
+  source_commit: string | null;
+  source_ref: string | null;
+  build_command: string[] | null;
+  build_env: Record<string, unknown> | null;
+  dependencies: unknown[] | null;
+  dependency_count: number;
+  builder: string | null;
+  fingerprint: string;
+  signature: string | null;
+  evidence_id: string | null;
+  created_at: string;
+  fabric_tx_id: string | null;
+  fabric_block: number | null;
+  fabric_status: string | null;
+  fabric_anchored: string | null;
+}
+
+export interface ProvenanceVerification {
+  verified: boolean;
+  checks?: Array<{ check: string; ok: boolean; detail?: string; observed_sha256?: string }>;
+  fingerprint?: string;
+  recomputed_fingerprint?: string;
 }
