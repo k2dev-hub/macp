@@ -45,9 +45,11 @@ python3 macp-verify.py --record <provenance.json> --artifact <file>
 
 ## 三、工单（可直接 POST）
 
+> 示例 JSON 用的是 `T-9200`（未占用的编号）；下文「本次实测结果」里的 `T-9101` 是已经跑过的那次。
+
 ```json
 {
-  "code": "T-9101",
+  "code": "T-9200",
   "title": "实现 macp-verify：离线校验产物与溯源记录",
   "workstream": "stream-core",
   "kind": "slice",

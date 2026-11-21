@@ -1,12 +1,17 @@
 {
-  "code": "T-9100",
+  "code": "T-9200",
   "title": "实现 macp-verify：离线校验产物与溯源记录",
   "workstream": "stream-core",
   "kind": "slice",
   "priority": "P1",
   "work_order": {
     "objective": "实现一个只依赖 Python 标准库的命令行工具 macp-verify：读取溯源记录 JSON 与产物文件，重新计算产物 SHA-256 并与记录比对，输出 PASS/FAIL 且用退出码表达结果。",
-    "write_surface": ["src/**", "tests/**", "Makefile", "notes/**"],
+    "write_surface": [
+      "src/**",
+      "tests/**",
+      "Makefile",
+      "notes/**"
+    ],
     "constraints": [
       "只允许改动 write_surface 内的路径",
       "不得引入第三方依赖，只能用 Python 标准库",
@@ -16,20 +21,46 @@
       "Makefile 的默认目标是第一个 target，必须产出 dist/macp-verify.py（可执行，带 shebang）"
     ],
     "acceptance": [
-      {"gate": "compile", "level": "L1", "required": true},
-      {"gate": "unit", "level": "L1", "required": true},
-      {"gate": "integration", "level": "L1", "required": true},
-      {"gate": "build", "level": "L1", "required": true}
+      {
+        "gate": "compile",
+        "level": "L1",
+        "required": true
+      },
+      {
+        "gate": "unit",
+        "level": "L1",
+        "required": true
+      },
+      {
+        "gate": "integration",
+        "level": "L1",
+        "required": true
+      },
+      {
+        "gate": "build",
+        "level": "L1",
+        "required": true
+      }
     ],
     "execution": {
       "profile": "kvm-debian",
-      "platforms": ["sandbox", "linux"],
-      "collect": ["dist/**"]
+      "platforms": [
+        "sandbox",
+        "linux"
+      ],
+      "collect": [
+        "dist/**"
+      ]
     },
     "completion_contract": {
       "observable": "dist/macp-verify.py 可执行：对一致的文件返回 0 并打印 PASS，对被替换的文件返回 1 并打印 FAIL",
-      "entrypoints": ["src/macp_verify.py:main"],
-      "consumers": ["tests/test_macp_verify.py", "tests/integration/test_cli.py"]
+      "entrypoints": [
+        "src/macp_verify.py:main"
+      ],
+      "consumers": [
+        "tests/test_macp_verify.py",
+        "tests/integration/test_cli.py"
+      ]
     }
   }
 }
