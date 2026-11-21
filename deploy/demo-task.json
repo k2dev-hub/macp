@@ -1,17 +1,19 @@
 {
-  "code": "T-9003",
-  "title": "为示例应用实现 multiply：单测 + 集成测试 + 构建产物 + 上链存证",
+  "code": "T-9100",
+  "title": "实现 macp-verify：离线校验产物与溯源记录",
   "workstream": "stream-core",
   "kind": "slice",
   "priority": "P1",
   "work_order": {
-    "objective": "在示例仓库中实现 multiply(a,b)，补齐单元测试、集成测试与 Makefile，使 compile/unit/integration/build 四个门禁全部通过。",
+    "objective": "实现一个只依赖 Python 标准库的命令行工具 macp-verify：读取溯源记录 JSON 与产物文件，重新计算产物 SHA-256 并与记录比对，输出 PASS/FAIL 且用退出码表达结果。",
     "write_surface": ["src/**", "tests/**", "Makefile", "notes/**"],
     "constraints": [
       "只允许改动 write_surface 内的路径",
-      "src/app.py 保留现有 add(a,b) 不动",
-      "Makefile 的默认目标必须产出 dist/hello.txt",
-      "tests/integration/ 下至少一个集成测试"
+      "不得引入第三方依赖，只能用 Python 标准库",
+      "CLI 必须支持 --record <path> 与 --artifact <path> 两个参数",
+      "匹配时退出码 0 并打印 PASS；不匹配时退出码 1 并打印 FAIL；参数或文件缺失时退出码 2",
+      "输出必须包含三行：记录里的 build_id、记录里的 artifact_sha256、实际计算的 sha256",
+      "Makefile 的默认目标是第一个 target，必须产出 dist/macp-verify.py（可执行，带 shebang）"
     ],
     "acceptance": [
       {"gate": "compile", "level": "L1", "required": true},
@@ -25,9 +27,9 @@
       "collect": ["dist/**"]
     },
     "completion_contract": {
-      "observable": "新增 src/app.py:multiply、tests/test_app.py、tests/integration/test_workflow.py、Makefile，dist/hello.txt 可复现",
-      "entrypoints": ["src/app.py:multiply"],
-      "consumers": ["tests/test_app.py", "tests/integration/test_workflow.py"]
+      "observable": "dist/macp-verify.py 可执行：对一致的文件返回 0 并打印 PASS，对被替换的文件返回 1 并打印 FAIL",
+      "entrypoints": ["src/macp_verify.py:main"],
+      "consumers": ["tests/test_macp_verify.py", "tests/integration/test_cli.py"]
     }
   }
 }
