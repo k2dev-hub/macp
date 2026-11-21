@@ -35,6 +35,36 @@ export function setToken(value: string) {
   }
 }
 
+let unauthorizedHandler: (() => void) | null = null;
+
+/** 注册会话失效处理：拿到 401 时清掉本地 token 并回到未登录界面。 */
+export function setUnauthorizedHandler(handler: (() => void) | null) {
+  unauthorizedHandler = handler;
+}
+
+const AUTH_CODES = new Set(["auth_required", "invalid_token", "token_expired", "admin_required"]);
+
+/** 401 一定是会话问题；403 只有带鉴权错误码时才算，平台/写面拒绝不能当过期。 */
+function isAuthFailure(status: number, payload: unknown): boolean {
+  if (status === 401) return true;
+  if (status !== 403) return false;
+  const detail = (payload as { detail?: unknown } | null)?.detail;
+  if (detail && typeof detail === "object") {
+    const code = (detail as { code?: string }).code;
+    if (code && AUTH_CODES.has(code)) return true;
+  }
+  return false;
+}
+
+function handleAuthFailure(): void {
+  try {
+    window.localStorage.removeItem("macp_admin_token");
+  } catch {
+    // storage may be unavailable; the UI still needs to know
+  }
+  unauthorizedHandler?.();
+}
+
 async function get<T>(path: string, auth = false): Promise<T> {
   const headers: Record<string, string> = {
     Accept: "application/json",
@@ -48,6 +78,7 @@ async function get<T>(path: string, auth = false): Promise<T> {
   const response = await fetch(path, { headers });
   if (!response.ok) {
     const body = await response.json().catch(() => null);
+    if (auth && isAuthFailure(response.status, body)) handleAuthFailure();
     throw new Error(errorText(path, response.status, body));
   }
   return (await response.json()) as T;
@@ -68,6 +99,7 @@ async function send<T>(method: string, path: string, body?: unknown): Promise<T>
   });
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
+    if (isAuthFailure(response.status, payload)) handleAuthFailure();
     throw new Error(errorText(path, response.status, payload));
   }
   if (response.status === 204) return undefined as T;

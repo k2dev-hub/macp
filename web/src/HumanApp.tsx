@@ -14,7 +14,7 @@ import {
   DeploymentUnitOutlined, ClusterOutlined, ExperimentOutlined, ReadOutlined,
 } from "@ant-design/icons";
 import type { EChartsOption } from "echarts";
-import { api, getProject, getToken, setProject, setToken } from "./api";
+import { api, getProject, getToken, setProject, setToken, setUnauthorizedHandler } from "./api";
 
 // 深链：?token=… 写入本地存储（只做一次），?page=… 作为初始页
 const DEEP_LINK = new URLSearchParams(window.location.search);
@@ -136,6 +136,21 @@ export default function HumanApp() {
   const [stateFilter, setStateFilter] = useState("all");
   const [eventFilter, setEventFilter] = useState("key");
   const [selectedTaskCodes, setSelectedTaskCodes] = useState<string[]>([]);
+  // 会话过期：直接退出登录，回到未登录状态并提示重新输入 Token，
+  // 而不是留在"已登录"界面里让每个接口都报不可用。
+  const expiredNotice = useRef(false);
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      setTokenState("");
+      setTokenOpen(true);
+      if (!expiredNotice.current) {
+        expiredNotice.current = true;
+        message.warning("登录已过期，请重新输入管理员 Token");
+      }
+    });
+    return () => setUnauthorizedHandler(null);
+  }, []);
+
   const [token, setTokenState] = useState(getToken());
   const [authMethod, setAuthMethodState] = useState(window.localStorage.getItem("macp_auth_method") || (getToken() ? "token" : ""));
   const [tokenOpen, setTokenOpen] = useState(false);
@@ -249,7 +264,7 @@ export default function HumanApp() {
     void (async () => {
       try {
         const result = await api.exchangeCode(code, window.location.origin + "/");
-        setToken(result.access_token); setTokenState(result.access_token);
+        setToken(result.access_token); setTokenState(result.access_token); expiredNotice.current = false;
         window.localStorage.setItem("macp_auth_method", "sso"); setAuthMethodState("sso");
         window.localStorage.removeItem("macp_oidc_state");
         window.history.replaceState({}, "", window.location.pathname);
@@ -893,7 +908,7 @@ export default function HumanApp() {
                   已登录 · {authMethod === "sso" ? (decodeIdentity(token) || "SSO 管理员") : "管理员 Token"}
                 </Tag>
                 <Button icon={<LogoutOutlined />} onClick={() => {
-                  setToken(""); setTokenState(""); setAuthMethodState("");
+                  setToken(""); setTokenState(""); setAuthMethodState(""); expiredNotice.current = false;
                   window.localStorage.removeItem("macp_auth_method");
                   setPage("overview");
                   void load(); void refreshAdmin();
@@ -966,7 +981,7 @@ export default function HumanApp() {
 
       <Modal title="管理员 Token" open={tokenOpen} onCancel={() => setTokenOpen(false)} onOk={async () => {
         const values = await tokenForm.validateFields();
-        setToken(values.token.trim()); setTokenState(values.token.trim());
+        setToken(values.token.trim()); setTokenState(values.token.trim()); expiredNotice.current = false;
         window.localStorage.setItem("macp_auth_method", "token"); setAuthMethodState("token");
         setTokenOpen(false); message.success("Token 已保存到本地浏览器"); await refreshAdmin();
       }} okText="保存">
